@@ -1,0 +1,10 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# Node modules
+node_modules
+
+# Distro folder
+dist
