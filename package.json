@@ -1,6 +1,6 @@
 {
   "name": "staction",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "A straightforward method of managing state, with support for Promises, Generators, and Async/Await.",
   "main": "build/bundle.js",
   "scripts": {
@@ -11,14 +11,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/brochington/state-manager.git"
+    "url": "git+https://github.com/brochington/staction.git"
   },
   "author": "Broch Stilley",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/brochington/state-manager/issues"
+    "url": "https://github.com/brochington/staction/issues"
   },
-  "homepage": "https://github.com/brochington/state-manager#readme",
+  "homepage": "https://github.com/brochington/staction#readme",
   "dependencies": {
     "babel-runtime": "^6.18.0"
   },
