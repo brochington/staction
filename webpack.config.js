@@ -3,13 +3,13 @@ var webpack = require("webpack");
 
 module.exports = {
     entry: [
-        "./src/StateManager.js"
+        "./src/Staction.js"
     ],
     output: {
         path: __dirname + '/build/',
         filename: 'bundle.js',
         publicPath: '/build/',
-        library: "state-manager",
+        library: "staction",
         libraryTarget: "umd",
         umdNamedDefine: true
     },

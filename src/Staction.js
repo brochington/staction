@@ -3,7 +3,7 @@ import {reduce} from 'lodash';
 
 declare var window: Object
 
-class StateManager {
+class Staction {
     _hasBeenInitialized: boolean
     _actions: Object
     _wrappedActions: Object
@@ -13,9 +13,10 @@ class StateManager {
     _stateSetCallback: Function
 
     init(actions: Object, initFunc: (o: Object) => Object, stateSetCallback: Function) {
+      console.log('got into init.');
         // attach stateManager to window for debugging
-        if (window) window.stateManager = this;
-
+        if (window) window.staction = this;
+        console.log("reduce?", reduce)
         try {
             if (!this._hasBeenInitialized) {
                 this._hasBeenInitialized = true;
@@ -26,10 +27,6 @@ class StateManager {
                 this._wrappedActions = {
                     ...wrappedActions
                 };
-
-                const allActions = {
-                    ...wrappedActions
-                }
 
                 this._actions = actions;
 
@@ -50,11 +47,11 @@ class StateManager {
         }
     }
 
-    getActions(): Object {
+    get actions() {
         return this._wrappedActions;
     }
 
-    getState(): any {
+    get state() {
         return this._state;
     }
 
@@ -82,7 +79,10 @@ class StateManager {
 
         return new Promise((resolve, reject) => {
             this.handleActionReturnTypes(newState, resolve);
-        })
+        }).then((updatedState) => {
+          this.callSetStateCallback(updatedState);
+          return Promise.resolve(updatedState);
+        });
 
             // this.callSetStateCallback(ns);
     }
@@ -124,6 +124,7 @@ class StateManager {
 
     /* Calls the setState callback */
     callSetStateCallback = (newState: Object) => {
+      console.log('callSetStateCallback!', newState);
         // call the callback specified in the init method.
         // NOTE: can do a check to see if state has been changed.
         this._state = newState;
@@ -136,13 +137,13 @@ class StateManager {
     /* Debugging assist methods */
     enableLogging = () => {
         this._loggingEnabled = true;
-        return `stateManager logging is enabled`;
+        return `Staction logging is enabled`;
     }
 
     disableLogging = () => {
         this._loggingEnabled = false;
-        return `stateManager logging is disabled`;
+        return `Staction logging is disabled`;
     }
 }
 
-export default StateManager;
+export default Staction;
