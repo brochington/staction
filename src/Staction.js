@@ -13,10 +13,10 @@ class Staction {
     _stateSetCallback: Function
 
     init(actions: Object, initFunc: (o: Object) => Object, stateSetCallback: Function) {
-      console.log('got into init.');
-        // attach stateManager to window for debugging
+        // attach Staction to window for debugging
+        // TODO: Figure out way to handle multiple Staction instances.
         if (window) window.staction = this;
-        console.log("reduce?", reduce)
+
         try {
             if (!this._hasBeenInitialized) {
                 this._hasBeenInitialized = true;
@@ -124,7 +124,6 @@ class Staction {
 
     /* Calls the setState callback */
     callSetStateCallback = (newState: Object) => {
-      console.log('callSetStateCallback!', newState);
         // call the callback specified in the init method.
         // NOTE: can do a check to see if state has been changed.
         this._state = newState;
