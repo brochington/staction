@@ -54,6 +54,8 @@ staction.actions.increment(incrementAmount).then(newState => {
 
   console.log(newState);
 })
+/* You can also catch errors in your actions as well!! */
+.catch(e => console.log(e))
 
 
 console.log(staction.state) // state is {count: 5}
