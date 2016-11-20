@@ -1,6 +1,8 @@
 // Karma configuration
 // Generated on Sat Nov 19 2016 14:47:13 GMT-0800 (PST)
 
+var travisENV = process.env.NODE_ENV === 'travis';
+
 module.exports = function(config) {
   console.log(process.env.NODE_ENV)
   config.set({
@@ -13,7 +15,7 @@ module.exports = function(config) {
         'karma-chai',
         'karma-webpack',
         'karma-mocha-reporter',
-    ].concat(process.env.NODE_ENV === 'travis' ? [] : ['karma-chrome-launcher']),
+    ].concat(travisENV ? ['karma-firefox-launcher'] : ['karma-chrome-launcher']),
 
     // frameworks to use
     // available frameworks: https://npmjs.org/browse/keyword/karma-adapter
@@ -76,7 +78,7 @@ module.exports = function(config) {
 
     // start these browsers
     // available browser launchers: https://npmjs.org/browse/keyword/karma-launcher
-    browsers: ['Chrome'],
+    browsers: travisENV ? ['Firefox'] : ['Chrome'],
 
 
     // Continuous Integration mode
