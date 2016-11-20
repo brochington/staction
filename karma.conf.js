@@ -13,8 +13,7 @@ module.exports = function(config) {
         'karma-chai',
         'karma-webpack',
         'karma-mocha-reporter',
-        process.env.NODE_ENV === 'travis' ? null : 'karma-chrome-launcher'
-    ],
+    ].concat(process.env.NODE_ENV === 'travis' ? [] : ['karma-chrome-launcher']),
 
     // frameworks to use
     // available frameworks: https://npmjs.org/browse/keyword/karma-adapter
