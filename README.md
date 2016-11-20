@@ -64,15 +64,19 @@ All of the following are valid actions.
 ```
 const myActions = {
   action1: (state, actions) => state() + 1,
+
   actions2: (state) => {
-    return Promise.resolve(state());
+    return Promise.resolve(state() + 1);
   },
+
   action3: function* (state, actions) {
     yield state() + 1;
     // state() === 1
+
     yield state() + 1;
     // state() === 2
   },
+
   action4: function* (state, actions) {
     yield state() + 1
     // state() === 1
@@ -80,7 +84,7 @@ const myActions = {
     yield new Promise(resolve => resolve(state() + 1))
     // state() === 2
 
-    // IIFE's come in really handy if you want to Generators AND async functions together.
+    // IIFE's come in really handy if you want to combine Generators and async functions.
     yield (async function(){
       return state() + 1
       // state() === 3
