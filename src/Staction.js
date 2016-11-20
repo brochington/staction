@@ -90,6 +90,7 @@ class Staction {
           try {
             const n = await newState;
             this.callSetStateCallback(n);
+            isComplete(n);
           }
 
           catch (e) {
@@ -102,7 +103,6 @@ class Staction {
             this.generatorHandler(newState, isComplete, reject);
         }
 
-        // newState should be an immutable object.
         else {
           this.callSetStateCallback(newState);
           isComplete(newState);
@@ -112,6 +112,11 @@ class Staction {
     /* A recursive function to handle the output of generator functions. */
     generatorHandler = async (genObject: Object, whenComplete: Function = noop, reject: Function) => {
         const {value, done} = genObject.next();
+
+        if (done) {
+          whenComplete(this._state)
+          return;
+        }
 
         if (value) {
             if (typeof value.then === 'function') {
@@ -123,13 +128,12 @@ class Staction {
                   reject(e);
               }
 
-              await this.handleActionReturnTypes(value, noop, reject);
             }
+
+            await this.handleActionReturnTypes(value, noop, reject);
         }
 
-        done
-            ? this.generatorHandler(genObject, whenComplete, reject)
-            : whenComplete(value);
+        this.generatorHandler(genObject, whenComplete, reject)
     };
 
     /* Calls the setState callback */
