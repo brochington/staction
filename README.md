@@ -3,7 +3,7 @@ A straightforward method of managing state, with support for Promises, Generator
 
 Because sometimes all you really need is state and actions.
 
-https://travis-ci.org/brochington/staction.svg?branch=master
+[![Build Status](https://travis-ci.org/brochington/staction.svg?branch=master)](https://travis-ci.org/brochington/staction)
 
 Basic usage:
 
