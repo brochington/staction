@@ -3,6 +3,8 @@ A straightforward method of managing state, with support for Promises, Generator
 
 Because sometimes all you really need is state and actions.
 
+https://travis-ci.org/brochington/staction.svg?branch=master
+
 Basic usage:
 
 ```
