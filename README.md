@@ -102,7 +102,8 @@ import React from 'react'
 import Staction from 'staction'
 import ChildComponent from './ChildComponent'
 
-const initState = {};
+const initState = {}
+
 const appActions = {
   noopAction: (state) => {return state}
 }
