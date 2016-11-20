@@ -3,6 +3,8 @@ import {reduce} from 'lodash';
 
 declare var window: Object
 
+var noop: Function = (): void => {}
+
 class Staction {
     _hasBeenInitialized: boolean
     _actions: Object
@@ -47,11 +49,11 @@ class Staction {
         }
     }
 
-    get actions() {
+    get actions(): Object {
         return this._wrappedActions;
     }
 
-    get state() {
+    get state(): Object {
         return this._state;
     }
 
@@ -69,7 +71,7 @@ class Staction {
     };
 
     /* injects state and actions as args into actions that are called. */
-    actionWrapper(name: string, func: Function, ...args: any) {
+    actionWrapper(name: string, func: Function, ...args: any): Promise<*> {
         // call the action function with correct args.
         if (this._loggingEnabled) {
             console.log("action: ", name, this._state);
@@ -78,48 +80,56 @@ class Staction {
         const newState = func(() => this._state, this._wrappedActions, ...args);
 
         return new Promise((resolve, reject) => {
-            this.handleActionReturnTypes(newState, resolve);
-        }).then((updatedState) => {
-          this.callSetStateCallback(updatedState);
-          return Promise.resolve(updatedState);
-        });
-
-            // this.callSetStateCallback(ns);
+          this.handleActionReturnTypes(newState, resolve, reject);
+        })
     }
 
     /* handles standard values, promises (from async functions) and generator function return values */
-    handleActionReturnTypes = async (newState: Object, cb: Function) => {
+    handleActionReturnTypes = async (newState: Object, isComplete: Function = noop, reject: Function) => {
         if (typeof newState.then === 'function') {
+          try {
             const n = await newState;
-            cb(n);
+            this.callSetStateCallback(n);
+          }
+
+          catch (e) {
+            reject(e)
+          }
         }
 
         // Detect if newState is actually a generator function.
         else if (typeof newState.next === 'function') {
-            this.generatorHandler(newState, cb);
+            this.generatorHandler(newState, isComplete, reject);
         }
 
         // newState should be an immutable object.
         else {
-            cb(newState)
+          this.callSetStateCallback(newState);
+          isComplete(newState);
         }
     };
 
     /* A recursive function to handle the output of generator functions. */
-    generatorHandler = async (genObject: Object, cb: Function) => {
+    generatorHandler = async (genObject: Object, whenComplete: Function = noop, reject: Function) => {
         const {value, done} = genObject.next();
 
         if (value) {
             if (typeof value.then === 'function') {
+              try {
                 await value;
+              }
+
+              catch (e) {
+                  reject(e);
+              }
+
+              await this.handleActionReturnTypes(value, noop, reject);
             }
-
-            this.handleActionReturnTypes(value, cb);
         }
 
-        if (!done) {
-            this.generatorHandler(genObject, cb)
-        }
+        done
+            ? this.generatorHandler(genObject, whenComplete, reject)
+            : whenComplete(value);
     };
 
     /* Calls the setState callback */
