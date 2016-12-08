@@ -7,7 +7,7 @@ Because sometimes all you really need is state and actions.
 
 Basic usage:
 
-```
+```javascript
 import Staction from 'staction'
 
 let staction = new Staction()
@@ -61,7 +61,7 @@ Actions should always yield/return the full new state, or a Promise that resolve
 
 All of the following are valid actions.
 
-```
+```javascript
 const myActions = {
   action1: (state, actions) => state() + 1,
 
@@ -97,7 +97,7 @@ const myActions = {
 
 A "state down, actions up" style of configuration in a React component might look something like:
 
-```
+```javascript
 import React from 'react'
 import Staction from 'staction'
 import ChildComponent from './ChildComponent'
