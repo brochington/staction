@@ -123,3 +123,13 @@ export default class MyComponent extends React.Component {
   }
 }
 ```
+
+
+## Staction instance methods
+
+### Logging
+
+- `staction.enableLogging()` - enable logging of each action call to console.
+- `staction.disableLogging()` - disable logging of actions to console.
+- `staction.disableStateWhenLogging()` - do not include current state when action logs.
+- `staction.enableStateWhenLogging()` - include current state in action logs.

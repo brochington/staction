@@ -1,6 +1,6 @@
 {
   "name": "staction",
-  "version": "0.0.7",
+  "version": "1.0.0",
   "description": "A straightforward method of managing state, with support for Promises, Generators, and Async/Await.",
   "main": "build/bundle.js",
   "scripts": {

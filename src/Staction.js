@@ -13,6 +13,8 @@ class Staction {
     _privateActions: Object
     _state: any
     _stateSetCallback: Function
+    _loggingEnabled = true
+    _addStateToLogs = false
 
     init(actions: Object, initFunc: (o: Object) => Object, stateSetCallback: Function) {
         // attach Staction to window for debugging
@@ -74,7 +76,13 @@ class Staction {
     actionWrapper(name: string, func: Function, ...args: any): Promise<*> {
         // call the action function with correct args.
         if (this._loggingEnabled) {
-            console.log("action: ", name, this._state);
+            if (this._addStateToLogs) {
+                console.log("action: ", name, this._state);
+            }
+
+            else {
+                console.log("action: ", name);
+            }
         }
 
         const newState = func(() => this._state, this._wrappedActions, ...args);
@@ -144,9 +152,6 @@ class Staction {
         this._stateSetCallback(this._state, this._wrappedActions);
     };
 
-    // _loggingEnabled = process.env.NODE_ENV == 'development' ? true : false;
-    _loggingEnabled = true;
-
     /* Debugging assist methods */
     enableLogging = () => {
         this._loggingEnabled = true;
@@ -156,6 +161,14 @@ class Staction {
     disableLogging = () => {
         this._loggingEnabled = false;
         return `Staction logging is disabled`;
+    }
+
+    disableStateWhenLogging = () => {
+        this._addStateToLogs = false
+    }
+
+    enableStateWhenLogging = () => {
+        this._addStateToLogs = true
     }
 }
 
