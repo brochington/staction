@@ -1,5 +1,5 @@
 // @flow
-import {reduce} from 'lodash';
+import reduce from 'lodash/reduce';
 
 declare var window: Object
 
