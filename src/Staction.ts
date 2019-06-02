@@ -1,7 +1,4 @@
-// @flow
 import reduce from 'lodash/reduce';
-
-declare var window: Object
 
 var noop: Function = (): void => {}
 
@@ -73,7 +70,7 @@ class Staction {
     };
 
     /* injects state and actions as args into actions that are called. */
-    actionWrapper(name: string, func: Function, ...args: any): Promise<*> {
+    actionWrapper(name: string, func: Function, ...args: any[]): Promise<any> {
         // call the action function with correct args.
         if (this._loggingEnabled) {
             if (this._addStateToLogs) {

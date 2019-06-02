@@ -3,7 +3,7 @@ var webpack = require("webpack");
 
 module.exports = {
     entry: [
-        "./src/Staction.js"
+        "./src/Staction.ts"
     ],
     output: {
         path: __dirname + '/build/',
@@ -11,25 +11,31 @@ module.exports = {
         publicPath: '/build/',
         library: "staction",
         libraryTarget: "umd",
-        umdNamedDefine: true
+        umdNamedDefine: true,
+        globalObject: "typeof self !== 'undefined' ? self : this"
     },
+    mode: 'production',
     module: {
-        loaders: [{
-            test: /\.js$/,
-            loader: 'babel',
-            include: path.join(__dirname, 'src'),
-            query: {
-                cacheDirectory: true,
-                presets: ["es2015", "stage-0"]
-            }
-        }]
+      rules: [{
+        test: /\.ts$/,
+        loader: 'babel-loader',
+        include: path.join(__dirname, 'src'),
+        options: {
+          presets: [
+            '@babel/preset-typescript',
+            '@babel/preset-env'
+          ],
+          plugins: [
+            ["@babel/plugin-transform-runtime", {
+              "helpers": false,
+              "regenerator": true,
+            }],
+            '@babel/plugin-proposal-object-rest-spread',
+            '@babel/plugin-proposal-class-properties'
+          ]
+        }
+      }]
     },
-    resolve: {
-        extensions: ['', '.js']
-    },
-    devtool: 'source-map',
-    plugins: [
-      new webpack.optimize.DedupePlugin(),
-      new webpack.optimize.UglifyJsPlugin({minimize: true})
-    ]
+    resolve: { extensions: ['.js', '.jsx', '.tsx', '.ts', '.json'] },
+    devtool: 'source-map'
 }

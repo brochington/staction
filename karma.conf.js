@@ -24,7 +24,7 @@ module.exports = function(config) {
 
     // list of files / patterns to load in the browser
     files: [
-      'src/**/*.test.js'
+      'src/**/*.test.ts'
     ],
 
 
@@ -33,23 +33,34 @@ module.exports = function(config) {
     ],
 
     webpack: {
-        module: {
-            loaders: [{
-                test: /\.js$/,
-                exclude: /node_modules/,
-                loader: 'babel-loader',
-                query: {
-                    compact: false,
-                    presets: ['es2015', 'stage-0']
-                }
-            }]
-        }
+      mode: 'production',
+      module: {
+        rules: [{
+          test: /\.ts$/,
+          loader: 'babel-loader',
+          options: {
+            presets: [
+              '@babel/preset-typescript',
+              '@babel/preset-env'
+            ],
+            plugins: [
+              ["@babel/plugin-transform-runtime", {
+                "helpers": false,
+                "regenerator": true,
+              }],
+              '@babel/plugin-proposal-object-rest-spread',
+              '@babel/plugin-proposal-class-properties'
+            ]
+          }
+        }]
+      },
+      resolve: { extensions: ['.js', '.jsx', '.tsx', '.ts', '.json'] },
     },
 
     // preprocess matching files before serving them to the browser
     // available preprocessors: https://npmjs.org/browse/keyword/karma-preprocessor
     preprocessors: {
-      'src/**/*.test.js': ['webpack']
+      'src/**/*.test.ts': ['webpack']
     },
 
 
