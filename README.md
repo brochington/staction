@@ -13,7 +13,7 @@ import Staction from 'staction'
 let staction = new Staction()
 
 let actions = {
-  increment: (state, actions, incrementAmount = 1) => {
+  increment: ({state, actions} , incrementAmount = 1) => {
     return {
       count: state().count + incrementAmount
     };
@@ -63,13 +63,13 @@ All of the following are valid actions.
 
 ```javascript
 const myActions = {
-  action1: (state, actions) => state() + 1,
+  action1: ({ state, actions }) => state() + 1,
 
-  actions2: (state) => {
+  actions2: ({ state }) => {
     return Promise.resolve(state() + 1);
   },
 
-  action3: function* (state, actions) {
+  action3: function* ({ state, actions }) {
     yield state() + 1;
     // state() === 1
 
@@ -77,7 +77,7 @@ const myActions = {
     // state() === 2
   },
 
-  action4: function* (state, actions) {
+  action4: function* ({ state, actions }) {
     yield state() + 1
     // state() === 1
 

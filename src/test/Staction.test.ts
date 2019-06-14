@@ -22,7 +22,7 @@ describe("Staction", function() {
 
   it("Init and call basic action", function(done) {
     var actions = {
-      testAction: function(state, actions) {
+      testAction: function({ state, actions }) {
         expect(state).to.be.an.instanceof(Function)
         expect(state()).to.eql({count: 1})
 
@@ -75,7 +75,7 @@ describe("Staction", function() {
 
     it('generator', function(done) {
       var actions = {
-        testAction: function* (state) {
+        testAction: function* ({ state }) {
 
           yield {count: state().count + 1}
 
@@ -99,7 +99,7 @@ describe("Staction", function() {
 
     it('promise', function(done) {
       var actions = {
-        testAction: function (state) {
+        testAction: function ({ state }) {
           return new Promise((resolve, reject) => {
             setTimeout(() => {
               resolve({count: state().count + 1})
@@ -120,7 +120,7 @@ describe("Staction", function() {
 
     it('generator and async/await', function(done) {
       var actions = {
-        testAction: function* (state) {
+        testAction: function* ({ state }) {
           yield {count: state().count + 1}
           expect(state().count).to.equal(1)
 

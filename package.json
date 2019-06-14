@@ -1,6 +1,6 @@
 {
   "name": "staction",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "A straightforward method of managing state, with support for Promises, Generators, and Async/Await.",
   "main": "build/bundle.js",
   "scripts": {
@@ -11,6 +11,7 @@
     "test": " ./node_modules/karma/bin/karma start",
     "test:travis": "./node_modules/karma/bin/karma start --single-run"
   },
+  "types": "./src/Staction.d.ts",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/brochington/staction.git"
