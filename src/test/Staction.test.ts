@@ -4,7 +4,7 @@ var staction = new Staction()
 var noop = () => {}
 
 var sleep = (time = 50) => {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     setTimeout(resolve, time)
   })
 }
@@ -12,7 +12,7 @@ var sleep = (time = 50) => {
 describe("Staction", function() {
   beforeEach(function() {
      staction = new Staction()
-     staction._loggingEnabled = false
+     staction.disableLogging();
   })
 
   it("Is new'ed correctly", function() {
@@ -44,7 +44,7 @@ describe("Staction", function() {
       () => {return {count: 1}},
       callback
     )
-
+    // @ts-ignore
     var result = staction.actions.testAction()
 
     expect(result).to.be.an.instanceof(Promise)
@@ -69,7 +69,7 @@ describe("Staction", function() {
       }
 
       staction.init(actions, () => {return {}}, noop);
-
+      // @ts-ignore
       staction.actions.testAction()
     })
 
@@ -88,7 +88,7 @@ describe("Staction", function() {
       }
 
       staction.init(actions, () => {return {count: 0}}, noop)
-
+      // @ts-ignore
       var result = staction.actions.testAction()
 
       result.then((state) => {
@@ -109,7 +109,7 @@ describe("Staction", function() {
       }
 
       staction.init(actions, () => {return {count: 0}}, noop)
-
+      // @ts-ignore
       var result = staction.actions.testAction()
 
       result.then((state) => {
@@ -135,7 +135,7 @@ describe("Staction", function() {
       }
 
       staction.init(actions, () => {return {count: 0}}, noop)
-
+      // @ts-ignore
       var result = staction.actions.testAction()
 
       result.then(state => {

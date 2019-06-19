@@ -2,14 +2,14 @@ import reduce from 'lodash/reduce';
 
 var noop: Function = (): void => {};
 
-type WrappedActions = {
-    [key: string]: Function
+type WrappedActions<Actions> = {
+  [Action in keyof Actions]: Actions[Action] extends (params: any, ...args: infer Args) => infer R ? (...args: Args) => Promise<R> : never;
 }
 
 class Staction<State, Actions> {
   private _hasBeenInitialized: boolean;
   private _actions: Actions;
-  private _wrappedActions: WrappedActions;
+  private _wrappedActions: WrappedActions<Actions>;
   private _wrappedPrivateActions: object;
   private _privateActions: object;
   private _state: State;
@@ -45,7 +45,7 @@ class Staction<State, Actions> {
     }
   }
 
-  get actions(): WrappedActions {
+  get actions(): WrappedActions<Actions> {
     return this._wrappedActions;
   }
 
@@ -58,15 +58,13 @@ class Staction<State, Actions> {
   }
 
   /* wraps actions with... the actionWrapper */
-  wrapActions = (acc: Object, val: any, name: string) => {
-    if (typeof val === 'function') {
-      acc[name] = (...args) => this.actionWrapper(name, val, ...args);
-    }
+  wrapActions = (acc: Object, actionFunc: Function, name: string) => {
+    acc[name] = (...args) => this.actionWrapper(name, actionFunc, ...args);
     return acc;
   };
 
   /* injects state and actions as args into actions that are called. */
-  actionWrapper(name: string, func: Function, ...args: any[]): Promise<any> {
+  actionWrapper(name: string, func: Function, ...args: any[]): Promise<State> {
     // call the action function with correct args.
     if (this._loggingEnabled) {
       if (this._addStateToLogs) {
@@ -95,7 +93,7 @@ class Staction<State, Actions> {
     newState: any,
     isComplete: Function = noop,
     reject: Function
-  ) => {
+  ): Promise<void> => {
     if (typeof newState.then === 'function') {
       try {
         const n = await newState;
