@@ -9,5 +9,15 @@ declare class Staction<State, Actions> {
 
   public actions: WrappedActions<State, Actions>;
 
+  public state: State;
+
+  getState(): State;
+
+  enableLogging(): void;
+  disableLogging(): void;
+
+  enableStateWhenLogging(): void;
+  disableStateWhenLogging(): void;
+
   init(actions: Actions, initFunc: (actions: WrappedActions<State, Actions>) => State, stateSetCallback: (state: State) => void): void;
 }
