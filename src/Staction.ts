@@ -30,8 +30,8 @@ class Staction<State, Actions> {
   private _stateSetCallback: Function;
   private _loggingEnabled: boolean = true;
   private _addStateToLogs: boolean = false;
-  private _preMiddleware: [];
-  private _postMiddleware: [];
+  private _preMiddleware: StactionMiddleware[] = [];
+  private _postMiddleware: StactionMiddleware[] = [];
 
   init(
     actions: Actions,

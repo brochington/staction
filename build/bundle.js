@@ -5732,9 +5732,9 @@ function () {
 
     _defineProperty(this, "_addStateToLogs", false);
 
-    _defineProperty(this, "_preMiddleware", void 0);
+    _defineProperty(this, "_preMiddleware", []);
 
-    _defineProperty(this, "_postMiddleware", void 0);
+    _defineProperty(this, "_postMiddleware", []);
 
     _defineProperty(this, "getState", function () {
       return _this._state;
