@@ -1,9 +1,23 @@
 import reduce from 'lodash/reduce';
+import groupBy from 'lodash/groupBy';
 
 var noop: Function = (): void => {};
 
 type WrappedActions<Actions> = {
   [Action in keyof Actions]: Actions[Action] extends (params: any, ...args: infer Args) => infer R ? (...args: Args) => Promise<R> : never;
+}
+
+interface StactionMiddleware {
+  type: 'pre' | 'post';
+  method: Function;
+  meta: object;
+}
+
+interface StactionMiddlewareParams<State, Meta = object> {
+  state: () => State;
+  name: string;
+  args: any[];
+  meta: Meta
 }
 
 class Staction<State, Actions> {
@@ -16,6 +30,8 @@ class Staction<State, Actions> {
   private _stateSetCallback: Function;
   private _loggingEnabled: boolean = true;
   private _addStateToLogs: boolean = false;
+  private _preMiddleware: [];
+  private _postMiddleware: [];
 
   init(
     actions: Actions,
@@ -64,7 +80,7 @@ class Staction<State, Actions> {
   };
 
   /* injects state and actions as args into actions that are called. */
-  actionWrapper(name: string, func: Function, ...args: any[]): Promise<State> {
+  async actionWrapper(name: string, func: Function, ...args: any[]): Promise<State> {
     // call the action function with correct args.
     if (this._loggingEnabled) {
       if (this._addStateToLogs) {
@@ -79,67 +95,63 @@ class Staction<State, Actions> {
         actions: this._wrappedActions
     }
 
-    const newState = func(params, ...args);
+    try {
+      await this.processMiddleware(this._preMiddleware, name, args);
 
-    // TODO: Add message to warn against undefined newState.
+      const newState = func(params, ...args);
 
-    return new Promise((resolve, reject) => {
-      this.handleActionReturnTypes(newState, resolve, reject);
-    });
+      await this.handleActionReturnTypes(newState);
+
+      await this.processMiddleware(this._postMiddleware, name, args);
+
+      this.callSetStateCallback(this._state);
+
+      return this._state;
+    } catch (e) {
+      throw e;
+    }
   }
 
   /* handles standard values, promises (from async functions) and generator function return values */
   handleActionReturnTypes = async (
     newState: any,
-    isComplete: Function = noop,
-    reject: Function
   ): Promise<void> => {
-    if (typeof newState.then === 'function') {
-      try {
-        const n = await newState;
-        this.callSetStateCallback(n);
-        isComplete(n);
-      } catch (e) {
-        reject(e);
+    try {
+      if (typeof newState.then === 'function') {
+        this._state = await newState;
       }
-    }
-
-    // Detect if newState is actually a generator function.
-    else if (typeof newState.next === 'function') {
-      this.generatorHandler(newState, isComplete, reject);
-    } else {
-      this.callSetStateCallback(newState);
-      isComplete(newState);
-    }
-  };
-
-  /* A recursive function to handle the output of generator functions. */
-  generatorHandler = async (
-    genObject: Generator,
-    whenComplete: Function = noop,
-    reject: Function
-  ) => {
-    const { value, done } = genObject.next();
-
-    if (done) {
-      whenComplete(this._state);
-      return;
-    }
-
-    if (value) {
-      if (typeof value.then === 'function') {
-        try {
-          await value;
-        } catch (e) {
-          reject(e);
+  
+      // Detect if newState is actually a generator function.
+      else if (typeof newState.next === 'function') {
+        for (const g of newState) {
+          await this.handleActionReturnTypes(g);
         }
+      } 
+      
+      else {
+        this._state = newState;
       }
-
-      await this.handleActionReturnTypes(value, noop, reject);
+    } catch (e) {
+      throw e;
     }
-
-    this.generatorHandler(genObject, whenComplete, reject);
   };
+
+  processMiddleware = async (middleware: StactionMiddleware[], name: string, args: any[]): Promise<void> => {
+    for (const m of middleware) {
+      if (typeof m.method === 'function') {
+        const params: StactionMiddlewareParams<State> = {
+          state: this.getState,
+          name,
+          args,
+          meta: m.meta
+        }
+
+        const mState = m.method(params);
+
+        await this.handleActionReturnTypes(mState);
+      }
+    }
+  }
 
   /* Calls the setState callback */
   callSetStateCallback = (newState: State) => {
@@ -148,6 +160,13 @@ class Staction<State, Actions> {
     this._state = newState;
     this._stateSetCallback(this._state, this._wrappedActions);
   };
+
+  setMiddleware = (middleware: StactionMiddleware[]) => {
+    const { pre, post } = groupBy(middleware, 'type');
+
+    this._preMiddleware = pre || [];
+    this._postMiddleware = post || [];
+  }
 
   /* Debugging assist methods */
   enableLogging = () => {

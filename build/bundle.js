@@ -1174,6 +1174,39 @@ module.exports = WeakMap;
 
 /***/ }),
 
+/***/ "./node_modules/lodash/_arrayAggregator.js":
+/*!*************************************************!*\
+  !*** ./node_modules/lodash/_arrayAggregator.js ***!
+  \*************************************************/
+/*! no static exports found */
+/***/ (function(module, exports) {
+
+/**
+ * A specialized version of `baseAggregator` for arrays.
+ *
+ * @private
+ * @param {Array} [array] The array to iterate over.
+ * @param {Function} setter The function to set `accumulator` values.
+ * @param {Function} iteratee The iteratee to transform keys.
+ * @param {Object} accumulator The initial aggregated object.
+ * @returns {Function} Returns `accumulator`.
+ */
+function arrayAggregator(array, setter, iteratee, accumulator) {
+  var index = -1,
+      length = array == null ? 0 : array.length;
+
+  while (++index < length) {
+    var value = array[index];
+    setter(accumulator, value, iteratee(value), array);
+  }
+  return accumulator;
+}
+
+module.exports = arrayAggregator;
+
+
+/***/ }),
+
 /***/ "./node_modules/lodash/_arrayFilter.js":
 /*!*********************************************!*\
   !*** ./node_modules/lodash/_arrayFilter.js ***!
@@ -1432,6 +1465,74 @@ function assocIndexOf(array, key) {
 }
 
 module.exports = assocIndexOf;
+
+
+/***/ }),
+
+/***/ "./node_modules/lodash/_baseAggregator.js":
+/*!************************************************!*\
+  !*** ./node_modules/lodash/_baseAggregator.js ***!
+  \************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+var baseEach = __webpack_require__(/*! ./_baseEach */ "./node_modules/lodash/_baseEach.js");
+
+/**
+ * Aggregates elements of `collection` on `accumulator` with keys transformed
+ * by `iteratee` and values set by `setter`.
+ *
+ * @private
+ * @param {Array|Object} collection The collection to iterate over.
+ * @param {Function} setter The function to set `accumulator` values.
+ * @param {Function} iteratee The iteratee to transform keys.
+ * @param {Object} accumulator The initial aggregated object.
+ * @returns {Function} Returns `accumulator`.
+ */
+function baseAggregator(collection, setter, iteratee, accumulator) {
+  baseEach(collection, function(value, key, collection) {
+    setter(accumulator, value, iteratee(value), collection);
+  });
+  return accumulator;
+}
+
+module.exports = baseAggregator;
+
+
+/***/ }),
+
+/***/ "./node_modules/lodash/_baseAssignValue.js":
+/*!*************************************************!*\
+  !*** ./node_modules/lodash/_baseAssignValue.js ***!
+  \*************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+var defineProperty = __webpack_require__(/*! ./_defineProperty */ "./node_modules/lodash/_defineProperty.js");
+
+/**
+ * The base implementation of `assignValue` and `assignMergeValue` without
+ * value checks.
+ *
+ * @private
+ * @param {Object} object The object to modify.
+ * @param {string} key The key of the property to assign.
+ * @param {*} value The value to assign.
+ */
+function baseAssignValue(object, key, value) {
+  if (key == '__proto__' && defineProperty) {
+    defineProperty(object, key, {
+      'configurable': true,
+      'enumerable': true,
+      'value': value,
+      'writable': true
+    });
+  } else {
+    object[key] = value;
+  }
+}
+
+module.exports = baseAssignValue;
 
 
 /***/ }),
@@ -2431,6 +2532,40 @@ module.exports = coreJsData;
 
 /***/ }),
 
+/***/ "./node_modules/lodash/_createAggregator.js":
+/*!**************************************************!*\
+  !*** ./node_modules/lodash/_createAggregator.js ***!
+  \**************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+var arrayAggregator = __webpack_require__(/*! ./_arrayAggregator */ "./node_modules/lodash/_arrayAggregator.js"),
+    baseAggregator = __webpack_require__(/*! ./_baseAggregator */ "./node_modules/lodash/_baseAggregator.js"),
+    baseIteratee = __webpack_require__(/*! ./_baseIteratee */ "./node_modules/lodash/_baseIteratee.js"),
+    isArray = __webpack_require__(/*! ./isArray */ "./node_modules/lodash/isArray.js");
+
+/**
+ * Creates a function like `_.groupBy`.
+ *
+ * @private
+ * @param {Function} setter The function to set accumulator values.
+ * @param {Function} [initializer] The accumulator object initializer.
+ * @returns {Function} Returns the new aggregator function.
+ */
+function createAggregator(setter, initializer) {
+  return function(collection, iteratee) {
+    var func = isArray(collection) ? arrayAggregator : baseAggregator,
+        accumulator = initializer ? initializer() : {};
+
+    return func(collection, setter, baseIteratee(iteratee, 2), accumulator);
+  };
+}
+
+module.exports = createAggregator;
+
+
+/***/ }),
+
 /***/ "./node_modules/lodash/_createBaseEach.js":
 /*!************************************************!*\
   !*** ./node_modules/lodash/_createBaseEach.js ***!
@@ -2506,6 +2641,28 @@ function createBaseFor(fromRight) {
 }
 
 module.exports = createBaseFor;
+
+
+/***/ }),
+
+/***/ "./node_modules/lodash/_defineProperty.js":
+/*!************************************************!*\
+  !*** ./node_modules/lodash/_defineProperty.js ***!
+  \************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+var getNative = __webpack_require__(/*! ./_getNative */ "./node_modules/lodash/_getNative.js");
+
+var defineProperty = (function() {
+  try {
+    var func = getNative(Object, 'defineProperty');
+    func({}, '', {});
+    return func;
+  } catch (e) {}
+}());
+
+module.exports = defineProperty;
 
 
 /***/ }),
@@ -4551,6 +4708,58 @@ module.exports = get;
 
 /***/ }),
 
+/***/ "./node_modules/lodash/groupBy.js":
+/*!****************************************!*\
+  !*** ./node_modules/lodash/groupBy.js ***!
+  \****************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+var baseAssignValue = __webpack_require__(/*! ./_baseAssignValue */ "./node_modules/lodash/_baseAssignValue.js"),
+    createAggregator = __webpack_require__(/*! ./_createAggregator */ "./node_modules/lodash/_createAggregator.js");
+
+/** Used for built-in method references. */
+var objectProto = Object.prototype;
+
+/** Used to check objects for own properties. */
+var hasOwnProperty = objectProto.hasOwnProperty;
+
+/**
+ * Creates an object composed of keys generated from the results of running
+ * each element of `collection` thru `iteratee`. The order of grouped values
+ * is determined by the order they occur in `collection`. The corresponding
+ * value of each key is an array of elements responsible for generating the
+ * key. The iteratee is invoked with one argument: (value).
+ *
+ * @static
+ * @memberOf _
+ * @since 0.1.0
+ * @category Collection
+ * @param {Array|Object} collection The collection to iterate over.
+ * @param {Function} [iteratee=_.identity] The iteratee to transform keys.
+ * @returns {Object} Returns the composed aggregate object.
+ * @example
+ *
+ * _.groupBy([6.1, 4.2, 6.3], Math.floor);
+ * // => { '4': [4.2], '6': [6.1, 6.3] }
+ *
+ * // The `_.property` iteratee shorthand.
+ * _.groupBy(['one', 'two', 'three'], 'length');
+ * // => { '3': ['one', 'two'], '5': ['three'] }
+ */
+var groupBy = createAggregator(function(result, value, key) {
+  if (hasOwnProperty.call(result, key)) {
+    result[key].push(value);
+  } else {
+    baseAssignValue(result, key, [value]);
+  }
+});
+
+module.exports = groupBy;
+
+
+/***/ }),
+
 /***/ "./node_modules/lodash/hasIn.js":
 /*!**************************************!*\
   !*** ./node_modules/lodash/hasIn.js ***!
@@ -5476,6 +5685,8 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _babel_runtime_regenerator__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_babel_runtime_regenerator__WEBPACK_IMPORTED_MODULE_0__);
 /* harmony import */ var lodash_reduce__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! lodash/reduce */ "./node_modules/lodash/reduce.js");
 /* harmony import */ var lodash_reduce__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(lodash_reduce__WEBPACK_IMPORTED_MODULE_1__);
+/* harmony import */ var lodash_groupBy__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! lodash/groupBy */ "./node_modules/lodash/groupBy.js");
+/* harmony import */ var lodash_groupBy__WEBPACK_IMPORTED_MODULE_2___default = /*#__PURE__*/__webpack_require__.n(lodash_groupBy__WEBPACK_IMPORTED_MODULE_2__);
 
 
 function asyncGeneratorStep(gen, resolve, reject, _next, _throw, key, arg) { try { var info = gen[key](arg); var value = info.value; } catch (error) { reject(error); return; } if (info.done) { resolve(value); } else { Promise.resolve(value).then(_next, _throw); } }
@@ -5489,6 +5700,7 @@ function _defineProperties(target, props) { for (var i = 0; i < props.length; i+
 function _createClass(Constructor, protoProps, staticProps) { if (protoProps) _defineProperties(Constructor.prototype, protoProps); if (staticProps) _defineProperties(Constructor, staticProps); return Constructor; }
 
 function _defineProperty(obj, key, value) { if (key in obj) { Object.defineProperty(obj, key, { value: value, enumerable: true, configurable: true, writable: true }); } else { obj[key] = value; } return obj; }
+
 
 
 
@@ -5520,20 +5732,22 @@ function () {
 
     _defineProperty(this, "_addStateToLogs", false);
 
+    _defineProperty(this, "_preMiddleware", void 0);
+
+    _defineProperty(this, "_postMiddleware", void 0);
+
     _defineProperty(this, "getState", function () {
       return _this._state;
     });
 
-    _defineProperty(this, "wrapActions", function (acc, val, name) {
-      if (typeof val === 'function') {
-        acc[name] = function () {
-          for (var _len = arguments.length, args = new Array(_len), _key = 0; _key < _len; _key++) {
-            args[_key] = arguments[_key];
-          }
+    _defineProperty(this, "wrapActions", function (acc, actionFunc, name) {
+      acc[name] = function () {
+        for (var _len = arguments.length, args = new Array(_len), _key = 0; _key < _len; _key++) {
+          args[_key] = arguments[_key];
+        }
 
-          return _this.actionWrapper.apply(_this, [name, val].concat(args));
-        };
-      }
+        return _this.actionWrapper.apply(_this, [name, actionFunc].concat(args));
+      };
 
       return acc;
     });
@@ -5544,60 +5758,110 @@ function () {
       var _ref = _asyncToGenerator(
       /*#__PURE__*/
       _babel_runtime_regenerator__WEBPACK_IMPORTED_MODULE_0___default.a.mark(function _callee(newState) {
-        var isComplete,
-            reject,
-            n,
-            _args = arguments;
+        var _iteratorNormalCompletion, _didIteratorError, _iteratorError, _iterator, _step, g;
+
         return _babel_runtime_regenerator__WEBPACK_IMPORTED_MODULE_0___default.a.wrap(function _callee$(_context) {
           while (1) {
             switch (_context.prev = _context.next) {
               case 0:
-                isComplete = _args.length > 1 && _args[1] !== undefined ? _args[1] : noop;
-                reject = _args.length > 2 ? _args[2] : undefined;
+                _context.prev = 0;
 
                 if (!(typeof newState.then === 'function')) {
-                  _context.next = 16;
+                  _context.next = 7;
                   break;
                 }
 
-                _context.prev = 3;
-                _context.next = 6;
+                _context.next = 4;
                 return newState;
 
-              case 6:
-                n = _context.sent;
-
-                _this.callSetStateCallback(n);
-
-                isComplete(n);
-                _context.next = 14;
+              case 4:
+                _this._state = _context.sent;
+                _context.next = 37;
                 break;
 
-              case 11:
-                _context.prev = 11;
-                _context.t0 = _context["catch"](3);
-                reject(_context.t0);
-
-              case 14:
-                _context.next = 17;
-                break;
-
-              case 16:
-                // Detect if newState is actually a generator function.
-                if (typeof newState.next === 'function') {
-                  _this.generatorHandler(newState, isComplete, reject);
-                } else {
-                  _this.callSetStateCallback(newState);
-
-                  isComplete(newState);
+              case 7:
+                if (!(typeof newState.next === 'function')) {
+                  _context.next = 36;
+                  break;
                 }
 
+                _iteratorNormalCompletion = true;
+                _didIteratorError = false;
+                _iteratorError = undefined;
+                _context.prev = 11;
+                _iterator = newState[Symbol.iterator]();
+
+              case 13:
+                if (_iteratorNormalCompletion = (_step = _iterator.next()).done) {
+                  _context.next = 20;
+                  break;
+                }
+
+                g = _step.value;
+                _context.next = 17;
+                return _this.handleActionReturnTypes(g);
+
               case 17:
+                _iteratorNormalCompletion = true;
+                _context.next = 13;
+                break;
+
+              case 20:
+                _context.next = 26;
+                break;
+
+              case 22:
+                _context.prev = 22;
+                _context.t0 = _context["catch"](11);
+                _didIteratorError = true;
+                _iteratorError = _context.t0;
+
+              case 26:
+                _context.prev = 26;
+                _context.prev = 27;
+
+                if (!_iteratorNormalCompletion && _iterator["return"] != null) {
+                  _iterator["return"]();
+                }
+
+              case 29:
+                _context.prev = 29;
+
+                if (!_didIteratorError) {
+                  _context.next = 32;
+                  break;
+                }
+
+                throw _iteratorError;
+
+              case 32:
+                return _context.finish(29);
+
+              case 33:
+                return _context.finish(26);
+
+              case 34:
+                _context.next = 37;
+                break;
+
+              case 36:
+                _this._state = newState;
+
+              case 37:
+                _context.next = 42;
+                break;
+
+              case 39:
+                _context.prev = 39;
+                _context.t1 = _context["catch"](0);
+                throw _context.t1;
+
+              case 42:
               case "end":
                 return _context.stop();
             }
           }
-        }, _callee, null, [[3, 11]]);
+        }, _callee, null, [[0, 39], [11, 22, 26, 34], [27,, 29, 33]]);
       }));
 
       return function (_x) {
@@ -5605,75 +5869,95 @@ function () {
       };
     }());
 
-    _defineProperty(this, "generatorHandler",
+    _defineProperty(this, "processMiddleware",
     /*#__PURE__*/
     function () {
       var _ref2 = _asyncToGenerator(
       /*#__PURE__*/
-      _babel_runtime_regenerator__WEBPACK_IMPORTED_MODULE_0___default.a.mark(function _callee2(genObject) {
-        var whenComplete,
-            reject,
-            _genObject$next,
-            value,
-            done,
-            _args2 = arguments;
+      _babel_runtime_regenerator__WEBPACK_IMPORTED_MODULE_0___default.a.mark(function _callee2(middleware, name, args) {
+        var _iteratorNormalCompletion2, _didIteratorError2, _iteratorError2, _iterator2, _step2, m, _params, mState;
 
         return _babel_runtime_regenerator__WEBPACK_IMPORTED_MODULE_0___default.a.wrap(function _callee2$(_context2) {
           while (1) {
             switch (_context2.prev = _context2.next) {
               case 0:
-                whenComplete = _args2.length > 1 && _args2[1] !== undefined ? _args2[1] : noop;
-                reject = _args2.length > 2 ? _args2[2] : undefined;
-                _genObject$next = genObject.next(), value = _genObject$next.value, done = _genObject$next.done;
+                _iteratorNormalCompletion2 = true;
+                _didIteratorError2 = false;
+                _iteratorError2 = undefined;
+                _context2.prev = 3;
+                _iterator2 = middleware[Symbol.iterator]();
 
-                if (!done) {
-                  _context2.next = 6;
+              case 5:
+                if (_iteratorNormalCompletion2 = (_step2 = _iterator2.next()).done) {
+                  _context2.next = 15;
                   break;
                 }
 
-                whenComplete(_this._state);
-                return _context2.abrupt("return");
+                m = _step2.value;
 
-              case 6:
-                if (!value) {
-                  _context2.next = 18;
+                if (!(typeof m.method === 'function')) {
+                  _context2.next = 12;
                   break;
                 }
 
-                if (!(typeof value.then === 'function')) {
-                  _context2.next = 16;
-                  break;
-                }
+                _params = {
+                  state: _this.getState,
+                  name: name,
+                  args: args,
+                  meta: m.meta
+                };
+                mState = m.method(_params);
+                _context2.next = 12;
+                return _this.handleActionReturnTypes(mState);
 
-                _context2.prev = 8;
-                _context2.next = 11;
-                return value;
-
-              case 11:
-                _context2.next = 16;
+              case 12:
+                _iteratorNormalCompletion2 = true;
+                _context2.next = 5;
                 break;
 
-              case 13:
-                _context2.prev = 13;
-                _context2.t0 = _context2["catch"](8);
-                reject(_context2.t0);
+              case 15:
+                _context2.next = 21;
+                break;
 
-              case 16:
-                _context2.next = 18;
-                return _this.handleActionReturnTypes(value, noop, reject);
+              case 17:
+                _context2.prev = 17;
+                _context2.t0 = _context2["catch"](3);
+                _didIteratorError2 = true;
+                _iteratorError2 = _context2.t0;
 
-              case 18:
-                _this.generatorHandler(genObject, whenComplete, reject);
+              case 21:
+                _context2.prev = 21;
+                _context2.prev = 22;
 
-              case 19:
+                if (!_iteratorNormalCompletion2 && _iterator2["return"] != null) {
+                  _iterator2["return"]();
+                }
+
+              case 24:
+                _context2.prev = 24;
+
+                if (!_didIteratorError2) {
+                  _context2.next = 27;
+                  break;
+                }
+
+                throw _iteratorError2;
+
+              case 27:
+                return _context2.finish(24);
+
+              case 28:
+                return _context2.finish(21);
+
+              case 29:
               case "end":
                 return _context2.stop();
             }
           }
-        }, _callee2, null, [[8, 13]]);
+        }, _callee2, null, [[3, 17, 21, 29], [22,, 24, 28]]);
       }));
 
-      return function (_x2) {
+      return function (_x2, _x3, _x4) {
         return _ref2.apply(this, arguments);
       };
     }());
@@ -5684,6 +5968,15 @@ function () {
       _this._state = newState;
 
       _this._stateSetCallback(_this._state, _this._wrappedActions);
+    });
+
+    _defineProperty(this, "setMiddleware", function (middleware) {
+      var _groupBy = lodash_groupBy__WEBPACK_IMPORTED_MODULE_2___default()(middleware, 'type'),
+          pre = _groupBy.pre,
+          post = _groupBy.post;
+
+      _this._preMiddleware = pre || [];
+      _this._postMiddleware = post || [];
     });
 
     _defineProperty(this, "enableLogging", function () {
@@ -5734,33 +6027,75 @@ function () {
     key: "actionWrapper",
 
     /* injects state and actions as args into actions that are called. */
-    value: function actionWrapper(name, func) {
-      var _this2 = this;
+    value: function () {
+      var _actionWrapper = _asyncToGenerator(
+      /*#__PURE__*/
+      _babel_runtime_regenerator__WEBPACK_IMPORTED_MODULE_0___default.a.mark(function _callee3(name, func) {
+        var params,
+            _len2,
+            args,
+            _key2,
+            newState,
+            _args3 = arguments;
 
-      // call the action function with correct args.
-      if (this._loggingEnabled) {
-        if (this._addStateToLogs) {
-          console.log('action: ', name, this._state);
-        } else {
-          console.log('action: ', name);
-        }
+        return _babel_runtime_regenerator__WEBPACK_IMPORTED_MODULE_0___default.a.wrap(function _callee3$(_context3) {
+          while (1) {
+            switch (_context3.prev = _context3.next) {
+              case 0:
+                // call the action function with correct args.
+                if (this._loggingEnabled) {
+                  if (this._addStateToLogs) {
+                    console.log('action: ', name, this._state);
+                  } else {
+                    console.log('action: ', name);
+                  }
+                }
+
+                params = {
+                  state: this.getState,
+                  actions: this._wrappedActions
+                };
+                _context3.prev = 2;
+
+                for (_len2 = _args3.length, args = new Array(_len2 > 2 ? _len2 - 2 : 0), _key2 = 2; _key2 < _len2; _key2++) {
+                  args[_key2 - 2] = _args3[_key2];
+                }
+
+                _context3.next = 6;
+                return this.processMiddleware(this._preMiddleware, name, args);
+
+              case 6:
+                newState = func.apply(void 0, [params].concat(args));
+                _context3.next = 9;
+                return this.handleActionReturnTypes(newState);
+
+              case 9:
+                _context3.next = 11;
+                return this.processMiddleware(this._postMiddleware, name, args);
+
+              case 11:
+                this.callSetStateCallback(this._state);
+                return _context3.abrupt("return", this._state);
+
+              case 15:
+                _context3.prev = 15;
+                _context3.t0 = _context3["catch"](2);
+                throw _context3.t0;
+
+              case 18:
+              case "end":
+                return _context3.stop();
+            }
+          }
+        }, _callee3, this, [[2, 15]]);
+      }));
+
+      function actionWrapper(_x5, _x6) {
+        return _actionWrapper.apply(this, arguments);
       }
 
-      var params = {
-        state: this.getState,
-        actions: this._wrappedActions
-      };
-
-      for (var _len2 = arguments.length, args = new Array(_len2 > 2 ? _len2 - 2 : 0), _key2 = 2; _key2 < _len2; _key2++) {
-        args[_key2 - 2] = arguments[_key2];
-      }
-
-      var newState = func.apply(void 0, [params].concat(args)); // TODO: Add message to warn against undefined newState.
-
-      return new Promise(function (resolve, reject) {
-        _this2.handleActionReturnTypes(newState, resolve, reject);
-      });
-    }
+      return actionWrapper;
+    }()
     /* handles standard values, promises (from async functions) and generator function return values */
 
   }, {
