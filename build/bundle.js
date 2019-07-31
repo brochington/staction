@@ -5776,12 +5776,12 @@ function () {
 
               case 4:
                 _this._state = _context.sent;
-                _context.next = 37;
+                _context.next = 38;
                 break;
 
               case 7:
                 if (!(typeof newState.next === 'function')) {
-                  _context.next = 36;
+                  _context.next = 37;
                   break;
                 }
 
@@ -5793,7 +5793,7 @@ function () {
 
               case 13:
                 if (_iteratorNormalCompletion = (_step = _iterator.next()).done) {
-                  _context.next = 20;
+                  _context.next = 21;
                   break;
                 }
 
@@ -5802,66 +5802,69 @@ function () {
                 return _this.handleActionReturnTypes(g);
 
               case 17:
+                _this.callSetStateCallback(_this._state);
+
+              case 18:
                 _iteratorNormalCompletion = true;
                 _context.next = 13;
                 break;
 
-              case 20:
-                _context.next = 26;
+              case 21:
+                _context.next = 27;
                 break;
 
-              case 22:
-                _context.prev = 22;
+              case 23:
+                _context.prev = 23;
                 _context.t0 = _context["catch"](11);
                 _didIteratorError = true;
                 _iteratorError = _context.t0;
 
-              case 26:
-                _context.prev = 26;
+              case 27:
                 _context.prev = 27;
+                _context.prev = 28;
 
                 if (!_iteratorNormalCompletion && _iterator["return"] != null) {
                   _iterator["return"]();
                 }
 
-              case 29:
-                _context.prev = 29;
+              case 30:
+                _context.prev = 30;
 
                 if (!_didIteratorError) {
-                  _context.next = 32;
+                  _context.next = 33;
                   break;
                 }
 
                 throw _iteratorError;
 
-              case 32:
-                return _context.finish(29);
-
               case 33:
-                return _context.finish(26);
+                return _context.finish(30);
 
               case 34:
-                _context.next = 37;
-                break;
+                return _context.finish(27);
 
-              case 36:
-                _this._state = newState;
+              case 35:
+                _context.next = 38;
+                break;
 
               case 37:
-                _context.next = 42;
+                _this._state = newState;
+
+              case 38:
+                _context.next = 43;
                 break;
 
-              case 39:
-                _context.prev = 39;
+              case 40:
+                _context.prev = 40;
                 _context.t1 = _context["catch"](0);
                 throw _context.t1;
 
-              case 42:
+              case 43:
               case "end":
                 return _context.stop();
             }
           }
-        }, _callee, null, [[0, 39], [11, 22, 26, 34], [27,, 29, 33]]);
+        }, _callee, null, [[0, 40], [11, 23, 27, 35], [28,, 30, 34]]);
       }));
 
       return function (_x) {
@@ -6074,7 +6077,10 @@ function () {
                 return this.processMiddleware(this._postMiddleware, name, args);
 
               case 11:
-                this.callSetStateCallback(this._state);
+                if (typeof newState.next !== 'function') {
+                  this.callSetStateCallback(this._state);
+                }
+
                 return _context3.abrupt("return", this._state);
 
               case 15:

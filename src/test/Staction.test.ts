@@ -74,6 +74,7 @@ describe("Staction", function() {
     })
 
     it('generator', function(done) {
+      var setStateCount = 0;
       var actions = {
         testAction: function* ({ state }) {
 
@@ -87,12 +88,17 @@ describe("Staction", function() {
         }
       }
 
-      staction.init(actions, () => {return {count: 0}}, noop)
+      staction.init(actions, () => {return {count: 0}}, () => {
+        console.log('call')
+        setStateCount += 1;
+      })
       // @ts-ignore
       var result = staction.actions.testAction()
 
       result.then((state) => {
-        expect(state).to.eql({count: 2})
+        expect(state).to.eql({count: 2});
+        console.log('setStateCount', setStateCount);
+        expect(setStateCount).to.equal(2);
         done()
       })
     })

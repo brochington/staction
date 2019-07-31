@@ -104,7 +104,10 @@ class Staction<State, Actions> {
 
       await this.processMiddleware(this._postMiddleware, name, args);
 
-      this.callSetStateCallback(this._state);
+      if (typeof newState.next !== 'function') {
+        // setState callback is called whenever a generator function yields.
+        this.callSetStateCallback(this._state);
+      }
 
       return this._state;
     } catch (e) {
@@ -125,6 +128,8 @@ class Staction<State, Actions> {
       else if (typeof newState.next === 'function') {
         for (const g of newState) {
           await this.handleActionReturnTypes(g);
+
+          this.callSetStateCallback(this._state);
         }
       } 
       
