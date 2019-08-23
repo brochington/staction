@@ -96,7 +96,6 @@ describe("Staction", function() {
 
       result.then((state) => {
         expect(state).to.eql({count: 2});
-        console.log('setStateCount', setStateCount);
         expect(setStateCount).to.equal(2);
         done()
       })

@@ -6056,7 +6056,8 @@ function () {
 
                 params = {
                   state: this.getState,
-                  actions: this._wrappedActions
+                  actions: this._wrappedActions,
+                  name: name
                 };
                 _context3.prev = 2;
 
@@ -6078,6 +6079,7 @@ function () {
 
               case 11:
                 if (typeof newState.next !== 'function') {
+                  // setState callback is called whenever a generator function yields.
                   this.callSetStateCallback(this._state);
                 }
 

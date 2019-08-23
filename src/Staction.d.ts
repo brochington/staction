@@ -48,4 +48,8 @@ declare namespace Staction {
     args: any[];
     meta: Meta
   }
+
+  export type WrappedActions<State, Actions> = {
+    [Action in keyof Actions]: Actions[Action] extends (params: any, ...args: infer Args) => infer R ? (...args: Args) => Promise<R> : never;
+  }
 }
