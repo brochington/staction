@@ -40,6 +40,7 @@ declare namespace Staction {
   export interface StactionActionParams<State, Actions> {
     state: () => State;
     actions: Actions;
+    name: string;
   }
 
   export interface StactionMiddlewareParams<State, Meta = object> {
