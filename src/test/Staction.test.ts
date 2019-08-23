@@ -89,7 +89,6 @@ describe("Staction", function() {
       }
 
       staction.init(actions, () => {return {count: 0}}, () => {
-        console.log('call')
         setStateCount += 1;
       })
       // @ts-ignore

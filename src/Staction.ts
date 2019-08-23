@@ -92,7 +92,8 @@ class Staction<State, Actions> {
 
     const params = {
         state: this.getState,
-        actions: this._wrappedActions
+        actions: this._wrappedActions,
+        name: name
     }
 
     try {
