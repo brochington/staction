@@ -1,5 +1,5 @@
 # Staction
-A straightforward method of managing state, with support for Promises, Generators, and Async/Await.
+A straightforward method of managing state, with support for Promises, Generators, Async/Await, and Async Generators (asyncIterable).
 
 Because sometimes all you really need is state and actions.
 
@@ -89,6 +89,13 @@ const myActions = {
       return state() + 1
       // state() === 3
     }())
+  },
+
+  // ...Or just use Async Generators! Very handy for "isFetching" type state.
+  action5: async function* ({ state }) {
+    const nextState = await Promise.resolve(state() + 1);
+
+    yield nextState;
   }
 }
 ```
@@ -133,3 +140,21 @@ export default class MyComponent extends React.Component {
 - `staction.disableLogging()` - disable logging of actions to console.
 - `staction.disableStateWhenLogging()` - do not include current state when action logs.
 - `staction.enableStateWhenLogging()` - include current state in action logs.
+
+
+## Middleware
+
+Staction supports basic middleware. They can be called pre or post action.
+
+```javascript
+
+const staction = new Staction();
+
+staction.setMiddleware([
+  {
+    type: 'pre', // or 'post,
+    method: ({ state, name, args, meta }) => { /* do stuff here. */ },
+    meta: {} // An object of user configurable meta data. 
+  }
+])
+```

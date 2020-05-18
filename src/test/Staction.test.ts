@@ -1,7 +1,7 @@
 import Staction from '../Staction'
+import noop from 'lodash/noop';
 
-var staction = new Staction()
-var noop = () => {}
+var staction = new Staction();
 
 var sleep = (time = 50) => {
   return new Promise((resolve) => {
@@ -147,6 +147,34 @@ describe("Staction", function() {
         expect(staction.state).to.eql({count: 3})
 
         done()
+      })
+    })
+    it('async generator (asyncIterable)', function(done) {
+      var actions = {
+        testAction: async function* ({ state }) {
+
+        yield { count: state().count + 1 };
+
+        expect(state().count).to.equal(1);
+
+        const secondCount = await Promise.resolve({ count: state().count + 1 });
+
+        yield secondCount;
+
+        expect(state().count).to.equal(2);
+
+        yield Promise.resolve({ count: state().count + 1 });
+        }
+      }
+
+      staction.init(actions, () => ({ count: 0}), noop);
+
+      // @ts-ignore
+      const result = staction.actions.testAction();
+
+      result.then(state => {
+        expect(state.count).to.equal(3);
+        done();
       })
     })
   })

@@ -1,7 +1,17 @@
 import reduce from 'lodash/reduce';
 import groupBy from 'lodash/groupBy';
 
-var noop: Function = (): void => {};
+function isIterable(testSubject: object): boolean {
+  return typeof testSubject[Symbol.iterator] === 'function';
+}
+
+function isAsyncIterable(testSubject: object) {
+  return typeof testSubject[Symbol.asyncIterator] === 'function'; 
+}
+
+function isPromise(obj: any): boolean {
+  return !!obj && (typeof obj === 'object' || typeof obj === 'function') && typeof obj.then === 'function';
+}
 
 type WrappedActions<Actions> = {
   [Action in keyof Actions]: Actions[Action] extends (params: any, ...args: infer Args) => infer R ? (...args: Args) => Promise<R> : never;
@@ -22,10 +32,8 @@ interface StactionMiddlewareParams<State, Meta = object> {
 
 class Staction<State, Actions> {
   private _hasBeenInitialized: boolean;
-  private _actions: Actions;
+  private _actions: Actions; // used to keep reference of actions, so they aren't gc'ed.
   private _wrappedActions: WrappedActions<Actions>;
-  private _wrappedPrivateActions: object;
-  private _privateActions: object;
   private _state: State;
   private _stateSetCallback: Function;
   private _loggingEnabled: boolean = true;
@@ -121,18 +129,25 @@ class Staction<State, Actions> {
     newState: any,
   ): Promise<void> => {
     try {
-      if (typeof newState.then === 'function') {
+      if (isPromise(newState)) {
         this._state = await newState;
       }
   
-      // Detect if newState is actually a generator function.
-      else if (typeof newState.next === 'function') {
+      else if (isIterable(newState)) {
         for (const g of newState) {
           await this.handleActionReturnTypes(g);
 
           this.callSetStateCallback(this._state);
         }
-      } 
+      }
+
+      else if (isAsyncIterable(newState)) {
+        for await (const g of newState) {
+          await this.handleActionReturnTypes(g);
+
+          this.callSetStateCallback(this._state);
+        }
+      }
       
       else {
         this._state = newState;

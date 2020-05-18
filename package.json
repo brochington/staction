@@ -1,6 +1,6 @@
 {
   "name": "staction",
-  "version": "4.0.11",
+  "version": "4.2.0",
   "description": "A straightforward method of managing state, with support for Promises, Generators, and Async/Await.",
   "main": "build/bundle.js",
   "scripts": {
@@ -23,28 +23,28 @@
   },
   "homepage": "https://github.com/brochington/staction#readme",
   "dependencies": {
-    "@babel/runtime": "^7.5.5",
-    "webpack-cli": "^3.3.6"
+    "@babel/runtime": "^7.9.6",
+    "webpack-cli": "^3.3.11"
   },
   "devDependencies": {
-    "@babel/core": "^7.5.5",
-    "@babel/plugin-proposal-class-properties": "^7.5.5",
-    "@babel/plugin-proposal-object-rest-spread": "^7.5.5",
-    "@babel/plugin-transform-runtime": "^7.5.5",
-    "@babel/preset-env": "^7.5.5",
-    "@babel/preset-typescript": "^7.3.3",
-    "babel-loader": "^8.0.6",
+    "@babel/core": "^7.9.6",
+    "@babel/plugin-proposal-class-properties": "^7.8.3",
+    "@babel/plugin-proposal-object-rest-spread": "^7.9.6",
+    "@babel/plugin-transform-runtime": "^7.9.6",
+    "@babel/preset-env": "^7.9.6",
+    "@babel/preset-typescript": "^7.9.0",
+    "babel-loader": "^8.1.0",
     "chai": "^4.2.0",
     "chai-as-promised": "^7.1.1",
-    "karma": "^4.2.0",
+    "karma": "^5.0.7",
     "karma-chai": "^0.1.0",
-    "karma-chrome-launcher": "^3.0.0",
+    "karma-chrome-launcher": "^3.1.0",
     "karma-cli": "^2.0.0",
-    "karma-firefox-launcher": "^1.1.0",
-    "karma-mocha": "^1.3.0",
+    "karma-firefox-launcher": "^1.3.0",
+    "karma-mocha": "^2.0.1",
     "karma-mocha-reporter": "^2.2.5",
     "karma-webpack": "^4.0.2",
-    "mocha": "^6.2.0",
-    "webpack": "^4.37.0"
+    "mocha": "^7.1.2",
+    "webpack": "^4.43.0"
   }
 }

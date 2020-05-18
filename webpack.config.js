@@ -14,8 +14,7 @@ module.exports = {
         umdNamedDefine: true,
         globalObject: "typeof self !== 'undefined' ? self : this"
     },
-    mode: 'development',
-    // mode: 'production',
+    mode: 'production',
     module: {
       rules: [{
         test: /\.ts$/,
