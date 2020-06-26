@@ -13,6 +13,17 @@ function isPromise(obj: any): boolean {
   return !!obj && (typeof obj === 'object' || typeof obj === 'function') && typeof obj.then === 'function';
 }
 
+function isGeneratorFunction(testSub: any): boolean {
+  return testSub && typeof testSub.next === 'function' && isIterable(testSub);
+}
+
+function isAsyncGeneratorFunction(testSub: any): boolean {
+  return testSub && typeof testSub.next === 'function' && isAsyncIterable(testSub);
+}
+
+const GeneratorFunction = function*(){}.constructor;
+const AsyncFunction = async function(){}.constructor;
+
 type WrappedActions<Actions> = {
   [Action in keyof Actions]: Actions[Action] extends (params: any, ...args: infer Args) => infer R ? (...args: Args) => Promise<R> : never;
 }
@@ -133,7 +144,7 @@ class Staction<State, Actions> {
         this._state = await newState;
       }
   
-      else if (isIterable(newState)) {
+      else if (isGeneratorFunction(newState)) {
         for (const g of newState) {
           await this.handleActionReturnTypes(g);
 
@@ -141,7 +152,7 @@ class Staction<State, Actions> {
         }
       }
 
-      else if (isAsyncIterable(newState)) {
+      else if (isAsyncGeneratorFunction(newState)) {
         for await (const g of newState) {
           await this.handleActionReturnTypes(g);
 

@@ -1,5 +1,6 @@
 import Staction from '../Staction'
 import noop from 'lodash/noop';
+import { stat } from 'fs';
 
 var staction = new Staction();
 
@@ -149,6 +150,34 @@ describe("Staction", function() {
         done()
       })
     })
+
+    it('Only interates over generator functions, not state that is iterable', function(done) {
+      var testIterable = [1, 2, 3];
+      var actions = {
+        testAction: function* ({ state }) {
+          yield state().map(v => v + 2);
+
+          expect(state()[0]).to.equal(3);
+          expect(state()[1]).to.equal(4);
+          expect(state()[2]).to.equal(5);
+
+          yield state().map(v => v + 2);
+        } 
+      }
+
+      staction.init(actions, () => testIterable, noop);
+
+      // @ts-ignore
+      const result = staction.actions.testAction();
+
+      result.then(state => {
+        expect(state[0]).to.equal(5);
+        expect(state[1]).to.equal(6);
+        expect(state[2]).to.equal(7);
+        done();
+      })
+    })
+
     it('async generator (asyncIterable)', function(done) {
       var actions = {
         testAction: async function* ({ state }) {
