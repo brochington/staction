@@ -1,6 +1,5 @@
 import Staction from '../Staction'
 import noop from 'lodash/noop';
-import { stat } from 'fs';
 
 var staction = new Staction();
 

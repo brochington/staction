@@ -1,13 +1,13 @@
 {
   "name": "staction",
-  "version": "4.2.1",
+  "version": "4.2.2",
   "description": "A straightforward method of managing state, with support for Promises, Generators, and Async/Await.",
   "main": "build/bundle.js",
   "scripts": {
     "rmrf": "rm -rf ./node_modules",
     "clean": "rm -rf ./build",
     "setup": "npm cache clear && npm run rmrf && npm install",
-    "build": "npm run clean && webpack --config webpack.config.js --display-error-details",
+    "build": "npm run clean && webpack --config webpack.config.js",
     "test": " ./node_modules/karma/bin/karma start",
     "test:travis": "./node_modules/karma/bin/karma start --single-run"
   },
@@ -23,20 +23,21 @@
   },
   "homepage": "https://github.com/brochington/staction#readme",
   "dependencies": {
-    "@babel/runtime": "^7.9.6",
+    "@babel/runtime": "^7.12.5",
+    "lodash": "^4.17.20",
     "webpack-cli": "^3.3.11"
   },
   "devDependencies": {
-    "@babel/core": "^7.9.6",
-    "@babel/plugin-proposal-class-properties": "^7.8.3",
-    "@babel/plugin-proposal-object-rest-spread": "^7.9.6",
-    "@babel/plugin-transform-runtime": "^7.9.6",
-    "@babel/preset-env": "^7.9.6",
-    "@babel/preset-typescript": "^7.9.0",
-    "babel-loader": "^8.1.0",
+    "@babel/core": "^7.12.10",
+    "@babel/plugin-proposal-class-properties": "^7.12.1",
+    "@babel/plugin-proposal-object-rest-spread": "^7.12.1",
+    "@babel/plugin-transform-runtime": "^7.12.10",
+    "@babel/preset-env": "^7.12.11",
+    "@babel/preset-typescript": "^7.12.7",
+    "babel-loader": "^8.2.2",
     "chai": "^4.2.0",
     "chai-as-promised": "^7.1.1",
-    "karma": "^5.0.7",
+    "karma": "^5.2.3",
     "karma-chai": "^0.1.0",
     "karma-chrome-launcher": "^3.1.0",
     "karma-cli": "^2.0.0",
@@ -44,7 +45,7 @@
     "karma-mocha": "^2.0.1",
     "karma-mocha-reporter": "^2.2.5",
     "karma-webpack": "^4.0.2",
-    "mocha": "^7.1.2",
+    "mocha": "^8.2.1",
     "webpack": "^4.43.0"
   }
 }
