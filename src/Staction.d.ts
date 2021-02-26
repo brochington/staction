@@ -1,8 +1,19 @@
 export = Staction;
 
-type WrappedActions<State, Actions> = {
-  [Action in keyof Actions]: Actions[Action] extends (params: any, ...args: infer Args) => infer R ? (...args: Args) => Promise<R> : never;
+interface ActionParams<State, Actions> {
+  state: () => State;
+  actions: WrappedActions<State, Actions>;
+  name: string;
 }
+
+type WrappedActions<State, Actions> = {
+  [Action in keyof Actions]: Actions[Action] extends (
+    params: ActionParams<State, Actions>,
+    ...args: infer Args
+  ) => infer R
+    ? (...args: Args) => Promise<R>
+    : never;
+};
 
 interface StactionMiddleware {
   type: 'pre' | 'post';
@@ -50,7 +61,18 @@ declare namespace Staction {
     meta: Meta
   }
 
-  export type WrappedActions<State, Actions> = {
-    [Action in keyof Actions]: Actions[Action] extends (params: any, ...args: infer Args) => infer R ? (...args: Args) => Promise<R> : never;
+  export interface ActionParams<State, Actions> {
+    state: () => State;
+    actions: WrappedActions<State, Actions>;
+    name: string;
   }
+  
+  export type WrappedActions<State, Actions> = {
+    [Action in keyof Actions]: Actions[Action] extends (
+      params: ActionParams<Actions, State>,
+      ...args: infer Args
+    ) => infer R
+      ? (...args: Args) => Promise<R>
+      : never;
+  };
 }
