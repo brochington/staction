@@ -39,11 +39,16 @@ describe("Staction", function() {
       expect(appState).to.eql({count: 2})
     }
 
+    expect(staction.initState).to.equal('uninitialized');
+
     staction.init(
       actions,
       () => {return {count: 1}},
       callback
     )
+
+    expect(staction.initState).to.equal('initialized');
+
     // @ts-ignore
     var result = staction.actions.testAction()
 
@@ -155,21 +160,25 @@ describe("Staction", function() {
       var actions = {
         testAction: function* ({ state }) {
           yield state().map(v => v + 2);
-
+          
           expect(state()[0]).to.equal(3);
           expect(state()[1]).to.equal(4);
           expect(state()[2]).to.equal(5);
-
+          
           yield state().map(v => v + 2);
         } 
       }
 
-      staction.init(actions, () => testIterable, noop);
+      let localStaction = new Staction<typeof testIterable, typeof actions>();
+      
+
+      localStaction.init(actions, () => testIterable, noop);
 
       // @ts-ignore
-      const result = staction.actions.testAction();
+      const result = localStaction.actions.testAction();
 
       result.then(state => {
+        console.log("should be here.");
         expect(state[0]).to.equal(5);
         expect(state[1]).to.equal(6);
         expect(state[2]).to.equal(7);

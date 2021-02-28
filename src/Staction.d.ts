@@ -1,8 +1,19 @@
 export = Staction;
 
+type InitState = 'uninitialized' | 'initializing' | 'initialized' | 'initerror';
+
+type WrappedParamAction<Actions> = {
+  [Action in keyof Actions]: Actions[Action] extends (
+    params: any,
+    ...args: infer Args
+  ) => infer R
+    ? (...args: Args) => Promise<R>
+    : never;
+};
+
 interface ActionParams<State, Actions> {
   state: () => State;
-  actions: WrappedActions<State, Actions>;
+  actions: WrappedParamAction<Actions>;
   name: string;
 }
 
@@ -39,6 +50,10 @@ declare class Staction<State, Actions> {
   setMiddleware(middleware: StactionMiddleware[]): void;
 
   init(actions: Actions, initFunc: (actions: WrappedActions<State, Actions>) => State, stateSetCallback: (state: State) => void): void;
+
+  get initialized(): boolean;
+
+  get initState(): InitState;
 }
 
 declare namespace Staction {
@@ -61,15 +76,26 @@ declare namespace Staction {
     meta: Meta
   }
 
+  export type InitState = 'uninitialized' | 'initializing' | 'initialized' | 'initerror';
+
+  export type WrappedParamAction<Actions> = {
+    [Action in keyof Actions]: Actions[Action] extends (
+      params: any,
+      ...args: infer Args
+    ) => infer R
+      ? (...args: Args) => Promise<R>
+      : never;
+  };
+  
   export interface ActionParams<State, Actions> {
     state: () => State;
-    actions: WrappedActions<State, Actions>;
+    actions: WrappedParamAction<Actions>;
     name: string;
   }
   
   export type WrappedActions<State, Actions> = {
     [Action in keyof Actions]: Actions[Action] extends (
-      params: ActionParams<Actions, State>,
+      params: ActionParams<State, Actions>,
       ...args: infer Args
     ) => infer R
       ? (...args: Args) => Promise<R>

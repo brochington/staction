@@ -13,7 +13,7 @@ import Staction from 'staction'
 let staction = new Staction()
 
 let actions = {
-  increment: ({state, actions} , incrementAmount = 1) => {
+  increment: ({ state, actions } , incrementAmount = 1) => {
     return {
       count: state().count + incrementAmount
     };
@@ -100,34 +100,117 @@ const myActions = {
 }
 ```
 
-## With React
+## Typescript
 
-A "state down, actions up" style of configuration in a React component might look something like:
+Staction aims to provide great Typescript support. This includes maintaining types througout actions! 
 
-```javascript
-import React from 'react'
-import Staction from 'staction'
-import ChildComponent from './ChildComponent'
+```typescript
+import Staction, { ActionParams } from 'staction';
 
-const initState = {}
+type State = {
+  foo: string;
+};
 
-const appActions = {
-  noopAction: (state) => {return state}
+const initialState: State = {
+  foo: 'bar',
+};
+
+type Params = ActionParams<State, Actions>;
+
+const actions = {
+  action1: (params: Params, val: string): State => {
+    return params.state();
+  },
+
+  action2: async (params: Params): Promsie<State> => {
+    return params.state();
+  },
+};
+
+// You may explicitly type the actions above, this is just a bit of
+// a shortcut.
+type Actions = typeof actions;
+
+const store = new Staction<State, Actions>();
+
+store.init(
+  actions,
+  () => initialState,
+  () => {}
+);
+
+// The arguments of this action should be correctly typed when calling it.
+store.actions.actions1('hello');
+```
+
+## With React (and Typescript)
+
+A "state down, actions up" style of configuration in a React component might look something like the following:
+
+```typescript
+
+/*  appState.ts  */
+
+export type AppState = {
+  foo: string;
 }
 
+export const initialState: AppState = {
+  foo: 'bar',
+}
 
-export default class MyComponent extends React.Component {
-  componentWillMount() {
-    this.staction = new Staction();
+/* appActions.ts */
 
-    this.staction.init(appActions, () => initState, this.setState)
-  }
+import { ActionParams } from 'staction';
 
-  render() {
-    return (
-      <ChildComponent actions={this.staction.actions} appState={this.state}/>
+type Params = ActionParams<State, Actions>;
+
+const appActions = {
+  noopAction: (params: Params) => {return state}
+}
+
+export type AppActions = typeof appActions;
+
+/* appStoreContext.ts */
+
+import React from 'react';
+import Staction from 'staction';
+import { AppState } from './appState';
+import { AppActions } from './appActions';
+
+const defaultStaction = new Staction<AppState, AppActions>();
+
+export type AppStore = Staction<AppState, AppActions>;
+
+export const AppStoreContext = React.createContext<AppStore>(defaultStaction);
+
+/* App.ts */
+
+import React, { FC } from 'react';
+import Staction, { ActionParams } from 'staction';
+import { AppStore, AppStoreContext } from './appStoreContext';
+import { initialState, AppState } from './appState';
+import { appActions, AppActions } from './appActions';
+
+const MyComponent: FC () => {
+  const [appStore, setAppStore] = useState<AppStore>(new Staction<AppState, AppActions>());
+  const [currentAppState, setCurrentAppState] = useState<AppState>(initialState);
+
+  useEffect(() => {
+    appStore.init(
+      appActions,
+      () => initialState,
+      (nextState) => setCurrentAppState(nextState)
     )
-  }
+  }, []);
+
+
+  return appStore.initialized ? (
+    <AppStoreContext.Provider value={appStore}>
+      {/* App Components */}
+    </AppStoreContext.Provider>
+  ) : null;
+}
 }
 ```
 
