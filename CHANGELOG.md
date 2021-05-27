@@ -1,5 +1,10 @@
 # Changelog
 
+### 5.0.0 - May 26, 2021
+- Add ESM bundle.
+- Update dependencies (Webpack, Karma, etc)
+- Remove Babel regenerator runtime and preset-env.
+
 ### 4.2.5 - Feb 27, 2021
 
 - Add better internal initialization state structure.
