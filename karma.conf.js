@@ -36,15 +36,8 @@ module.exports = function (config) {
             test: /\.ts$/,
             loader: 'babel-loader',
             options: {
-              presets: ['@babel/preset-typescript', '@babel/preset-env'],
+              presets: ['@babel/preset-typescript'],
               plugins: [
-                [
-                  '@babel/plugin-transform-runtime',
-                  {
-                    helpers: false,
-                    regenerator: true,
-                  },
-                ],
                 '@babel/plugin-proposal-object-rest-spread',
                 '@babel/plugin-proposal-class-properties',
               ],
