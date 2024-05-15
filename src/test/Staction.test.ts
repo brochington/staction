@@ -1,7 +1,8 @@
+import { describe, expect, test, beforeEach } from '@jest/globals';
 import Staction from '../Staction';
-import noop from 'lodash/noop';
+import { ActionParams, WrappedActions } from '../Staction.d';
 
-var staction = new Staction();
+const noop = () => {};
 
 var sleep = (time = 50) => {
   return new Promise((resolve) => {
@@ -9,25 +10,25 @@ var sleep = (time = 50) => {
   });
 };
 
-describe('Staction', function () {
-  beforeEach(function () {
-    staction = new Staction();
+describe('Staction', () => {
+  test("Is new'ed correctly", () => {
+    const staction = new Staction();
     staction.disableLogging();
+    expect(staction).toBeDefined();
   });
 
-  it("Is new'ed correctly", function () {
-    expect(staction).to.be.exist;
-    expect(staction);
-  });
+  test('Init and call basic action', async () => {
+    type State = { count: number };
+    type Actions = any;
+    type Params = ActionParams<State, Actions>;
 
-  it('Init and call basic action', function (done) {
     var actions = {
-      testAction: function ({ state, actions }) {
-        expect(state).to.be.an.instanceof(Function);
-        expect(state()).to.eql({ count: 1 });
+      testAction: function ({ state, actions }: Params) {
+        expect(state).toBeInstanceOf(Function);
+        expect(state()).toMatchObject({ count: 1 });
 
-        expect(actions).to.have.property('testAction');
-        expect(actions.testAction).to.be.an.instanceof(Function);
+        expect(actions).toHaveProperty('testAction');
+        expect(actions.testAction).toBeInstanceOf(Function);
 
         return {
           count: state().count + 1,
@@ -35,11 +36,14 @@ describe('Staction', function () {
       },
     };
 
-    var callback = function (appState) {
-      expect(appState).to.eql({ count: 2 });
+    const callback = function (appState: State) {
+      expect(appState).toMatchObject({ count: 2 });
     };
 
-    expect(staction.initState).to.equal('uninitialized');
+    const staction = new Staction<State, Actions>();
+    staction.disableLogging();
+
+    expect(staction.initState).toEqual('uninitialized');
 
     staction.init(
       actions,
@@ -49,22 +53,21 @@ describe('Staction', function () {
       callback
     );
 
-    expect(staction.initState).to.equal('initialized');
+    expect(staction.initState).toEqual('initialized');
 
     // @ts-ignore
     var result = staction.actions.testAction();
 
-    expect(result).to.be.an.instanceof(Promise);
+    expect(result).toBeInstanceOf(Promise);
 
-    result.then((newState) => {
-      expect(newState).to.eql({ count: 2 });
-      expect(staction.state).to.eql({ count: 2 });
-      done();
-    });
+    const newState = await result;
+
+    expect(newState).toMatchObject({ count: 2 });
+    expect(staction.state).toMatchObject({ count: 2 });
   });
 
-  context('actions', function () {
-    it('async/await', function (done) {
+  describe('actions', () => {
+    test('async/await', (done) => {
       var actions = {
         testAction: async function () {
           await sleep();
@@ -74,6 +77,9 @@ describe('Staction', function () {
           return {};
         },
       };
+
+      const staction = new Staction<{}, typeof actions>();
+      staction.disableLogging();
 
       staction.init(
         actions,
@@ -86,19 +92,33 @@ describe('Staction', function () {
       staction.actions.testAction();
     });
 
-    it('generator', function (done) {
-      var setStateCount = 0;
-      var actions = {
-        testAction: function* ({ state }) {
+    test('generator', async () => {
+      type State = { count: number };
+      type StateFunc = () => State;
+
+      let setStateCount = 0;
+      const actions = {
+        testAction: function* ({ state }: Params) {
           yield { count: state().count + 1 };
 
-          expect(state().count).to.equal(1);
+          expect(state().count).toEqual(1);
 
           yield { count: state().count + 1 };
 
-          expect(state().count).to.equal(2);
+          expect(state().count).toEqual(2);
         },
       };
+
+      type Actions = typeof actions;
+
+      type Params = {
+        state: StateFunc;
+        actions: WrappedActions<Actions, Params>;
+        name: string;
+      };
+
+      const staction = new Staction<State, typeof actions>();
+      staction.disableLogging();
 
       staction.init(
         actions,
@@ -109,20 +129,20 @@ describe('Staction', function () {
           setStateCount += 1;
         }
       );
-      // @ts-ignore
-      var result = staction.actions.testAction();
 
-      result.then((state) => {
-        expect(state).to.eql({ count: 2 });
-        expect(setStateCount).to.equal(2);
-        done();
-      });
+      // @ts-ignore
+      const finalState = (await staction.actions.testAction()) as State;
+
+      expect(finalState).toMatchObject({ count: 2 });
+      expect(setStateCount).toEqual(2);
     });
 
-    it('promise', function (done) {
-      var actions = {
-        testAction: function ({ state }) {
-          return new Promise((resolve, reject) => {
+    test('promise', async () => {
+      type State = { count: number };
+      type StateFunc = () => State;
+      const actions = {
+        testAction: function ({ state }: Params) {
+          return new Promise((resolve) => {
             setTimeout(() => {
               resolve({ count: state().count + 1 });
             }, 50);
@@ -130,6 +150,17 @@ describe('Staction', function () {
         },
       };
 
+      type Actions = typeof actions;
+
+      type Params = {
+        state: StateFunc;
+        actions: WrappedActions<Actions, Params>;
+        name: string;
+      };
+
+      const staction = new Staction<State, Actions>();
+      staction.disableLogging();
+
       staction.init(
         actions,
         () => {
@@ -138,29 +169,40 @@ describe('Staction', function () {
         noop
       );
       // @ts-ignore
-      var result = staction.actions.testAction();
+      const finalState = (await staction.actions.testAction()) as State;
 
-      result.then((state) => {
-        expect(state).to.eql({ count: 1 });
-        done();
-      });
+      expect(finalState).toMatchObject({ count: 1 });
     });
 
-    it('generator and async/await', function (done) {
-      var actions = {
-        testAction: function* ({ state }) {
+    test('generator and async/await', async () => {
+      type State = { count: number };
+      type StateFunc = () => State;
+
+      const actions = {
+        testAction: function* ({ state }: Params) {
           yield { count: state().count + 1 };
-          expect(state().count).to.equal(1);
+          expect(state().count).toEqual(1);
 
           yield (async function () {
             return { count: state().count + 1 };
           })();
 
-          expect(state().count).to.equal(2);
+          expect(state().count).toEqual(2);
 
           yield { count: state().count + 1 };
         },
       };
+
+      type Actions = typeof actions;
+
+      type Params = {
+        state: StateFunc;
+        actions: WrappedActions<Actions, Params>;
+        name: string;
+      };
+
+      const staction = new Staction<State, Actions>();
+      staction.disableLogging();
 
       staction.init(
         actions,
@@ -169,52 +211,60 @@ describe('Staction', function () {
         },
         noop
       );
+
       // @ts-ignore
-      var result = staction.actions.testAction();
+      const finalState = (await staction.actions.testAction()) as State;
 
-      result.then((state) => {
-        expect(state.count).to.equal(3);
-        expect(staction.state).to.eql({ count: 3 });
-
-        done();
-      });
+      expect(finalState.count).toEqual(3);
+      expect(staction.state).toMatchObject({ count: 3 });
     });
 
-    it('Only interates over generator functions, not state that is iterable', function (done) {
+    test('Only interates over generator functions, not state that is iterable', async () => {
+      type State = number[];
+      type StateFunc = () => State;
       var testIterable = [1, 2, 3];
       var actions = {
-        testAction: function* ({ state }) {
+        testAction: function* ({ state }: Params) {
           yield state().map((v) => v + 2);
 
-          expect(state()[0]).to.equal(3);
-          expect(state()[1]).to.equal(4);
-          expect(state()[2]).to.equal(5);
+          expect(state()[0]).toEqual(3);
+          expect(state()[1]).toEqual(4);
+          expect(state()[2]).toEqual(5);
 
           yield state().map((v) => v + 2);
         },
       };
 
+      type Actions = typeof actions;
+
+      type Params = {
+        state: StateFunc;
+        actions: WrappedActions<Actions, Params>;
+        name: string;
+      };
+
       let localStaction = new Staction<typeof testIterable, typeof actions>();
+      localStaction.disableLogging();
 
       localStaction.init(actions, () => testIterable, noop);
 
       // @ts-ignore
-      const result = localStaction.actions.testAction();
+      const finalState =
+        (await localStaction.actions.testAction()) as unknown as number[];
 
-      result.then((state) => {
-        expect(state[0]).to.equal(5);
-        expect(state[1]).to.equal(6);
-        expect(state[2]).to.equal(7);
-        done();
-      });
+      expect(finalState[0]).toEqual(5);
+      expect(finalState[1]).toEqual(6);
+      expect(finalState[2]).toEqual(7);
     });
 
-    it('async generator (asyncIterable)', function (done) {
+    test('async generator (asyncIterable)', async () => {
+      type State = { count: number };
+      type StateFunc = () => State;
       var actions = {
-        testAction: async function* ({ state }) {
+        testAction: async function* ({ state }: Params) {
           yield { count: state().count + 1 };
 
-          expect(state().count).to.equal(1);
+          expect(state().count).toEqual(1);
 
           const secondCount = await Promise.resolve({
             count: state().count + 1,
@@ -222,21 +272,29 @@ describe('Staction', function () {
 
           yield secondCount;
 
-          expect(state().count).to.equal(2);
+          expect(state().count).toEqual(2);
 
           yield Promise.resolve({ count: state().count + 1 });
         },
       };
 
+      type Actions = typeof actions;
+
+      type Params = {
+        state: StateFunc;
+        actions: WrappedActions<Actions, Params>;
+        name: string;
+      };
+
+      const staction = new Staction<State, Actions>();
+      staction.disableLogging();
+
       staction.init(actions, () => ({ count: 0 }), noop);
 
       // @ts-ignore
-      const result = staction.actions.testAction();
+      const result = (await staction.actions.testAction()) as unknown as State;
 
-      result.then((state) => {
-        expect(state.count).to.equal(3);
-        done();
-      });
+      expect(result.count).toEqual(3);
     });
   });
 });
