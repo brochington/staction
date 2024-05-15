@@ -1,11 +1,13 @@
-import reduce from 'lodash/reduce';
-import groupBy from 'lodash/groupBy';
+type TestSubject = {
+  [Symbol.iterator]: string;
+  [Symbol.asyncIterator]: string;
+};
 
-function isIterable(testSubject: object): boolean {
+function isIterable(testSubject: TestSubject): boolean {
   return typeof testSubject[Symbol.iterator] === 'function';
 }
 
-function isAsyncIterable(testSubject: object) {
+function isAsyncIterable(testSubject: TestSubject) {
   return typeof testSubject[Symbol.asyncIterator] === 'function';
 }
 
@@ -26,9 +28,6 @@ function isAsyncGeneratorFunction(testSub: any): boolean {
     testSub && typeof testSub.next === 'function' && isAsyncIterable(testSub)
   );
 }
-
-const GeneratorFunction = function* () {}.constructor;
-const AsyncFunction = async function () {}.constructor;
 
 type WrappedActions<Actions> = {
   [Action in keyof Actions]: Actions[Action] extends (
@@ -54,12 +53,13 @@ interface StactionMiddlewareParams<State, Meta = object> {
 
 type InitState = 'uninitialized' | 'initializing' | 'initialized' | 'initerror';
 
-class Staction<State, Actions> {
+class Staction<State, Actions extends { [s: string]: Function }> {
   private _initState: InitState = 'uninitialized';
+  //@ts-ignore
   private _actions: Actions; // used to keep reference of actions, so they aren't gc'ed.
-  private _wrappedActions: WrappedActions<Actions>;
-  private _state: State;
-  private _stateSetCallback: Function;
+  private _wrappedActions: WrappedActions<Actions> = {} as WrappedActions<Actions>;
+  private _state: State = {} as State;
+  private _stateSetCallback: Function = () => {};
   private _loggingEnabled: boolean = true;
   private _addStateToLogs: boolean = false;
   private _preMiddleware: StactionMiddleware[] = [];
@@ -75,7 +75,14 @@ class Staction<State, Actions> {
         this._initState = 'initializing';
 
         /* wrap actions */
-        this._wrappedActions = reduce(actions, this.wrapActions, {});
+        this._wrappedActions = Object.entries(actions).reduce(
+          (acc, [name, actionFunc]) => {
+            acc[name] = (...args: any) =>
+              this.actionWrapper(name, actionFunc, ...args);
+            return acc;
+          },
+          {} as { [s: string]: Function }
+        ) as WrappedActions<Actions>;
 
         /* Keep reference to actions */
         this._actions = actions;
@@ -126,12 +133,6 @@ class Staction<State, Actions> {
 
   getState = (): State => {
     return this._state;
-  };
-
-  /* wraps actions with... the actionWrapper */
-  wrapActions = (acc: Object, actionFunc: Function, name: string) => {
-    acc[name] = (...args) => this.actionWrapper(name, actionFunc, ...args);
-    return acc;
   };
 
   /* injects state and actions as args into actions that are called. */
@@ -230,7 +231,7 @@ class Staction<State, Actions> {
   };
 
   setMiddleware = (middleware: StactionMiddleware[]) => {
-    const { pre, post } = groupBy(middleware, 'type');
+    const { pre, post } = Object.groupBy(middleware, ({ type }) => type);
 
     this._preMiddleware = pre || [];
     this._postMiddleware = post || [];
