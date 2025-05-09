@@ -1,8 +1,6 @@
-export = Staction;
+export type InitState = 'uninitialized' | 'initializing' | 'initialized' | 'initerror';
 
-type InitState = 'uninitialized' | 'initializing' | 'initialized' | 'initerror';
-
-type WrappedParamAction<Actions> = {
+export type WrappedParamAction<Actions> = {
   [Action in keyof Actions]: Actions[Action] extends (
     params: any,
     ...args: infer Args
@@ -11,19 +9,44 @@ type WrappedParamAction<Actions> = {
     : never;
 };
 
-interface ActionParams<State, Actions> {
+export interface ActionParams<State, Actions extends object, PassedMapType = Map<any, any>> {
   state: () => State;
-  actions: WrappedParamAction<Actions>;
+  actions: WrappedActions<State, Actions, PassedMapType>;
+  passed: (
+    updater: PassedMapType | ((currentMap: PassedMapType) => PassedMapType)
+  ) => void;
   name: string;
 }
 
-type WrappedActions<State, Actions> = {
-  [Action in keyof Actions]: Actions[Action] extends (
-    params: ActionParams<State, Actions>,
-    ...args: infer Args
-  ) => infer R
-    ? (...args: Args) => Promise<R>
-    : never;
+// Helper type to perform the actual wrapping of an action function
+type WrapAction<
+  State,
+  ActionsObject extends object, // The full object/map of all actions
+  PassedMapType,
+  F // The specific action function type from ActionsObject[K]
+> = F extends (
+  // Check if F matches the expected signature for an action
+  params: ActionParams<State, ActionsObject, PassedMapType>,
+  ...args: infer Args // Capture the ...rest arguments of the original action
+) => any // Original return type (can be anything)
+  // If it matches, the wrapped action has this signature:
+  ? (...args: Args) => Promise<{ state: State; passed: PassedMapType }>
+  // If F doesn't match the expected signature, it becomes 'never'
+  : never;
+
+// Main WrappedActions type (simplified for non-optional actions)
+export type WrappedActions<
+  State,
+  ActionsObject extends object, // Your map of action names to action functions
+  PassedMapType = Map<any, any>
+> = {
+  // For each key K in ActionsObject
+  [K in keyof ActionsObject]: WrapAction< // Apply the WrapAction helper
+    State,
+    ActionsObject,
+    PassedMapType,
+    ActionsObject[K] // Pass the specific action function ActionsObject[K] as F
+  >;
 };
 
 interface StactionMiddleware {
@@ -32,10 +55,17 @@ interface StactionMiddleware {
   meta: object;
 }
 
-declare class Staction<State, Actions> {
+export interface StactionMiddlewareParams<State, Meta = object> {
+  state: () => State;
+  name: string;
+  args: any[];
+  meta: Meta
+}
+
+declare class Staction<State, Actions extends object, PassedMapType = Map<any, any>> {
   constructor();
 
-  public actions: WrappedActions<State, Actions>;
+  public actions: WrappedActions<State, Actions, PassedMapType>;
 
   public state: State;
 
@@ -49,56 +79,11 @@ declare class Staction<State, Actions> {
 
   setMiddleware(middleware: StactionMiddleware[]): void;
 
-  init(actions: Actions, initFunc: (actions: WrappedActions<State, Actions>) => State, stateSetCallback: (state: State) => void): void;
+  init(actions: Actions, initFunc: (actions: WrappedActions<State, Actions, PassedMapType>) => Promise<State> | State, stateSetCallback: (state: State, actions: WrappedActions<State, Actions, PassedMapType>) => void): Promise<void>;
 
   get initialized(): boolean;
 
   get initState(): InitState;
 }
 
-declare namespace Staction {
-  export interface StactionMiddleware {
-    type: 'pre' | 'post';
-    method: Function;
-    meta: object;
-  }
-
-  export interface StactionActionParams<State, Actions> {
-    state: () => State;
-    actions: Actions;
-    name: string;
-  }
-
-  export interface StactionMiddlewareParams<State, Meta = object> {
-    state: () => State;
-    name: string;
-    args: any[];
-    meta: Meta
-  }
-
-  export type InitState = 'uninitialized' | 'initializing' | 'initialized' | 'initerror';
-
-  export type WrappedParamAction<Actions> = {
-    [Action in keyof Actions]: Actions[Action] extends (
-      params: any,
-      ...args: infer Args
-    ) => infer R
-      ? (...args: Args) => Promise<R>
-      : never;
-  };
-  
-  export interface ActionParams<State, Actions> {
-    state: () => State;
-    actions: WrappedParamAction<Actions>;
-    name: string;
-  }
-  
-  export type WrappedActions<State, Actions> = {
-    [Action in keyof Actions]: Actions[Action] extends (
-      params: ActionParams<State, Actions>,
-      ...args: infer Args
-    ) => infer R
-      ? (...args: Args) => Promise<R>
-      : never;
-  };
-}
+export default Staction;

@@ -1,243 +1,162 @@
 # Staction
-A straightforward method of managing state, with support for Promises, Generators, Async/Await, and Async Generators (asyncIterable).
 
-Because sometimes all you really need is state and actions.
+A straightforward, powerful, and modern method for managing state in JavaScript and TypeScript applications. Staction supports Promises, Generators, Async/Await, and Async Generators (asyncIterable) out of the box, providing a flexible way to handle both simple and complex state logic.
 
-[![Build Status](https://travis-ci.org/brochington/staction.svg?branch=master)](https://travis-ci.org/brochington/staction)
+Because sometimes, all you really need is well-managed state and clearly defined actions.
 
-Basic usage:
+**Key Features:**
 
-```javascript
-import Staction from 'staction'
+*   **Simple & Predictable:** Clear separation of state and actions.
+*   **Async Powerhouse:** Seamlessly handle asynchronous operations with Promises, `async/await`, Generators, and Async Generators.
+*   **TypeScript First:** Excellent TypeScript support for robust, type-safe state management.
+*   **Middleware:** Extend functionality with `pre` and `post` action middleware for logging, API calls, etc.
+*   **"Passed" Data:** Actions can return auxiliary data alongside state changes using the `passed` map, perfect for things like new IDs or operation-specific status messages.
+*   **Lightweight:** No unnecessary boilerplate, keeping your focus on your application logic.
 
-let staction = new Staction()
+## Quick Links
 
-let actions = {
-  increment: ({ state, actions } , incrementAmount = 1) => {
-    return {
-      count: state().count + incrementAmount
-    };
+*   **[Full Usage Guide](./USAGE_GUIDE.md)**: Comprehensive guide with examples and best practices.
+*   **[API Reference](./API_REFERENCE.md)**: Detailed API documentation.
+
+## Basic Usage (TypeScript)
+
+```typescript
+import Staction, { ActionParams } from 'staction';
+
+// 1. Define your State and Actions types
+type AppState = {
+  count: number;
+  lastMessage?: string;
+};
+
+// Optional: Define a type for your "passed" data
+type AppPassedMap = Map<string, string | number>;
+
+// Define your action signatures
+type AppActions = {
+  increment: (params: ActionParams<AppState, AppActions, AppPassedMap>, amount?: number) => AppState;
+  setMessage: (params: ActionParams<AppState, AppActions, AppPassedMap>, newMessage: string) => Promise<AppState>;
+};
+
+// 2. Create a Staction instance
+const staction = new Staction<AppState, AppActions, AppPassedMap>();
+
+// 3. Implement your actions
+const actionsImpl: AppActions = {
+  increment: ({ state, passed }, amount = 1) => {
+    passed(map => map.set('incrementAmount', amount));
+    return { ...state(), count: state().count + amount };
+  },
+  setMessage: async ({ state, passed }, newMessage) => {
+    await new Promise(resolve => setTimeout(resolve, 50)); // Simulate async work
+    passed(map => map.set('messageSetAt', Date.now()));
+    return { ...state(), lastMessage: newMessage };
+  },
+};
+
+// 4. Define your initial state function
+const getInitialState = (/* wrappedActions */): AppState => {
+  // You can use wrappedActions here if needed for initial setup actions
+  return { count: 0 };
+};
+
+// 5. Define your state update callback (e.g., for React setState)
+const onStateUpdate = (newState: AppState, wrappedActions: AppActions) => {
+  console.log('State Updated:', newState);
+  // In React: setCurrentAppState(newState);
+  // wrappedActions are the same as staction.actions, useful for triggering follow-up actions from callback if necessary
+};
+
+// 6. Initialize Staction (it's async!)
+async function main() {
+  try {
+    console.log('Initializing Staction...', staction.initState);
+    await staction.init(actionsImpl, getInitialState, onStateUpdate);
+    console.log('Staction Initialized! Current State:', staction.state);
+    console.log('Is initialized:', staction.initialized);
+
+    // 7. Dispatch actions
+    const { state: stateAfterIncrement, passed: passedFromIncrement } = await staction.actions.increment(5);
+    console.log('After increment:', stateAfterIncrement);
+    console.log('Passed from increment:', passedFromIncrement.get('incrementAmount')); // 5
+
+    const { state: stateAfterMessage, passed: passedFromMessage } = await staction.actions.setMessage('Hello Staction 6.0!');
+    console.log('After setMessage:', stateAfterMessage);
+    console.log('Message set timestamp:', passedFromMessage.get('messageSetAt'));
+
+    console.log('Final state from instance:', staction.state); // Access current state directly
+
+  } catch (error) {
+    console.error('Error during Staction setup or action:', error);
+    console.error('Staction initialization state:', staction.initState);
   }
 }
 
-let initialState = (actions) => {
-  return {count: 0};
-}
-
-/*
-   This method is called every time after state is updated.
-   Useful for calling setState at the top of a React component tree.
-*/
-
-let onStateUpdate = (state, actions) => console.log(`count is ${state}`)
-
-staction.init(
-  actions,
-  initialState,
-  onStateUpdate
-)
-
-let incrementAmount = 5
-
-/*
-   all actions return a promise, that resolves with the updated state.
-   This helps eliminate passing callbacks through, and also allows for a way
-   to react to errors that occur in actions from outside the action.
-*/
-let result = staction.actions.increment(incrementAmount)
-
-result
-  .then(newState => console.log(newState))
-  .catch(e => console.log(e))
-
-
-console.log(staction.state) // state is {count: 5}
+main();
 ```
 
 ## Actions
 
-Actions should always yield/return the full new state, or a Promise that resolves to the new state. They can be regular, async, or generator functions, and async call order will be maintained! The state argument is a function that will always return the current state. Additional arguments passed when the action is invoked are passed after state and actions.
+Actions are the core of state changes in Staction. They can be plain functions, async functions, or even generator functions (both sync and async).
 
+*   **Return Value:** Actions should always yield or return data that Staction can use to determine the new state (or a Promise that resolves to it).
+*   **`params` Object:** The first argument to every action is a `params` object containing:
+    *   `state: () => State`: A function to get the current state.
+    *   `actions: WrappedActions`: Access to other actions.
+    *   `passed: (updater) => void`: Function to update the auxiliary `passed` map.
+    *   `name: string`: The name of the current action.
 
-All of the following are valid actions.
+For a deep dive into actions, including handling different return types (Promises, Generators, Async Generators), see the [**Actions In-Depth section in the Usage Guide**](./USAGE_GUIDE.md#actions-in-depth).
 
-```javascript
-const myActions = {
-  action1: ({ state, actions }) => state() + 1,
+## TypeScript
 
-  actions2: ({ state }) => {
-    return Promise.resolve(state() + 1);
-  },
+Staction is built with TypeScript and offers robust typing. Define types for your `State`, `Actions`, and optionally `PassedMapType` for a fully type-safe experience.
 
-  action3: function* ({ state, actions }) {
-    yield state() + 1;
-    // state() === 1
+Refer to the [**TypeScript Usage section in the Usage Guide**](./USAGE_GUIDE.md#typescript-usage) for detailed examples.
 
-    yield state() + 1;
-    // state() === 2
-  },
+## With React (and TypeScript)
 
-  action4: function* ({ state, actions }) {
-    yield state() + 1
-    // state() === 1
+A common pattern involves using React Context to provide the Staction instance to your component tree.
 
-    yield new Promise(resolve => resolve(state() + 1))
-    // state() === 2
+See the [**React Integration Example in the Usage Guide**](./USAGE_GUIDE.md#react-integration-example-typescript) for a complete example.
 
-    // IIFE's come in really handy if you want to combine Generators and async functions.
-    yield (async function(){
-      return state() + 1
-      // state() === 3
-    }())
-  },
+## Staction Instance API Highlights
 
-  // ...Or just use Async Generators! Very handy for "isFetching" type state.
-  action5: async function* ({ state }) {
-    const nextState = await Promise.resolve(state() + 1);
+Once you have `const staction = new Staction<MyState, MyActions>()`:
 
-    yield nextState;
-  }
-}
-```
+*   **`staction.init(actions, initFunc, stateSetCallback)`**: (Async) Initializes the store. See [Initialization Lifecycle](./USAGE_GUIDE.md#initialization-lifecycle).
+*   **`staction.actions`**: An object containing your wrapped actions. Calling `staction.actions.myAction(...args)` returns `Promise<{ state: NewState, passed: PassedMap }>`.
+*   **`staction.state`**: The current, read-only state.
+*   **`staction.getState()`**: Method to get the current state.
+*   **`staction.initialized`**: Boolean getter, `true` if init was successful.
+*   **`staction.initState`**: String getter for detailed initialization status (`'uninitialized'`, `'initializing'`, `'initialized'`, `'initerror'`).
+*   **Logging Methods**: `enableLogging()`, `disableLogging()`, `enableStateWhenLogging()`, `disableStateWhenLogging()`.
+*   **`staction.setMiddleware(middlewares)`**: Add `pre` or `post` action middleware.
 
-## Typescript
-
-Staction aims to provide great Typescript support. This includes maintaining types througout actions! 
-
-```typescript
-import Staction, { ActionParams } from 'staction';
-
-type State = {
-  foo: string;
-};
-
-const initialState: State = {
-  foo: 'bar',
-};
-
-type Params = ActionParams<State, Actions>;
-
-const actions = {
-  action1: (params: Params, val: string): State => {
-    return params.state();
-  },
-
-  action2: async (params: Params): Promsie<State> => {
-    return params.state();
-  },
-};
-
-// You may explicitly type the actions above, this is just a bit of
-// a shortcut.
-type Actions = typeof actions;
-
-const store = new Staction<State, Actions>();
-
-store.init(
-  actions,
-  () => initialState,
-  () => {}
-);
-
-// The arguments of this action should be correctly typed when calling it.
-store.actions.actions1('hello');
-```
-
-## With React (and Typescript)
-
-A "state down, actions up" style of configuration in a React component might look something like the following:
-
-```typescript
-
-/*  appState.ts  */
-
-export type AppState = {
-  foo: string;
-}
-
-export const initialState: AppState = {
-  foo: 'bar',
-}
-
-/* appActions.ts */
-
-import { ActionParams } from 'staction';
-
-type Params = ActionParams<State, Actions>;
-
-const appActions = {
-  noopAction: (params: Params) => {return state}
-}
-
-export type AppActions = typeof appActions;
-
-/* appStoreContext.ts */
-
-import React from 'react';
-import Staction from 'staction';
-import { AppState } from './appState';
-import { AppActions } from './appActions';
-
-const defaultStaction = new Staction<AppState, AppActions>();
-
-export type AppStore = Staction<AppState, AppActions>;
-
-export const AppStoreContext = React.createContext<AppStore>(defaultStaction);
-
-/* App.ts */
-
-import React, { FC } from 'react';
-import Staction, { ActionParams } from 'staction';
-import { AppStore, AppStoreContext } from './appStoreContext';
-import { initialState, AppState } from './appState';
-import { appActions, AppActions } from './appActions';
-
-const MyComponent: FC () => {
-  const [appStore, setAppStore] = useState<AppStore>(new Staction<AppState, AppActions>());
-  const [currentAppState, setCurrentAppState] = useState<AppState>(initialState);
-
-  useEffect(() => {
-    appStore.init(
-      appActions,
-      () => initialState,
-      (nextState) => setCurrentAppState(nextState)
-    )
-  }, []);
-
-
-  return appStore.initialized ? (
-    <AppStoreContext.Provider value={appStore}>
-      {/* App Components */}
-    </AppStoreContext.Provider>
-  ) : null;
-}
-}
-```
-
-
-## Staction instance methods
-
-### Logging
-
-- `staction.enableLogging()` - enable logging of each action call to console.
-- `staction.disableLogging()` - disable logging of actions to console.
-- `staction.disableStateWhenLogging()` - do not include current state when action logs.
-- `staction.enableStateWhenLogging()` - include current state in action logs.
-
+For the complete list of methods and properties, check the [**API Reference**](./API_REFERENCE.md).
 
 ## Middleware
 
-Staction supports basic middleware. They can be called pre or post action.
+Extend Staction's functionality using middleware. Middleware functions can run before (`pre`) or after (`post`) an action, allowing you to log, modify state, or trigger side effects.
 
 ```javascript
+const myMiddleware = {
+  type: 'pre', // or 'post'
+  method: ({ state, name, args, meta }) => {
+    console.log(`Action '${name}' is about to run.`);
+    // Middleware can also return new state, Promises, or be generators
+  },
+  meta: { /* your custom metadata */ }
+};
 
-const staction = new Staction();
-
-staction.setMiddleware([
-  {
-    type: 'pre', // or 'post,
-    method: ({ state, name, args, meta }) => { /* do stuff here. */ },
-    meta: {} // An object of user configurable meta data. 
-  }
-])
+staction.setMiddleware([myMiddleware]);
 ```
+
+Learn more about [**Middleware in the Usage Guide**](./USAGE_GUIDE.md#middleware).
+
+## Further Information
+
+*   **[Full Usage Guide](./USAGE_GUIDE.md)**: For comprehensive explanations, examples, and best practices.
+*   **[API Reference](./API_REFERENCE.md)**: For detailed information on all classes, methods, and types.
+
+Contributions, issues, and feature requests are welcome!
