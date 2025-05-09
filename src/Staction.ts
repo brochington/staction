@@ -29,15 +29,6 @@ function isAsyncGeneratorFunction(testSub: any): boolean {
   );
 }
 
-type WrappedActions<Actions, PassedMapType = Map<any, any>> = {
-  [Action in keyof Actions]: Actions[Action] extends (
-    params: any,
-    ...args: infer Args
-  ) => any
-    ? (...args: Args) => Promise<{ state: any; passed: PassedMapType }>
-    : never;
-};
-
 interface StactionMiddleware {
   type: 'pre' | 'post';
   method: Function;
@@ -53,16 +44,22 @@ interface StactionMiddlewareParams<State, Meta = object> {
 
 type InitState = 'uninitialized' | 'initializing' | 'initialized' | 'initerror';
 
-class Staction<
-  State,
-  Actions extends { [s: string]: Function },
-  PassedMapType = Map<any, any>
-> {
+// Helper type for internal wrapped actions
+type InternalWrappedActions<UserActionsObject extends { [s: string]: Function }, CurrentState> = {
+  [K in keyof UserActionsObject]: UserActionsObject[K] extends (
+    params: any, 
+    ...args: infer Args 
+  ) => any 
+    ? (...args: Args) => Promise<{ state: CurrentState; aux: any | undefined }>
+    : never; 
+};
+
+class Staction<State, ActionsInput extends { [s: string]: Function }> {
   private _initState: InitState = 'uninitialized';
-  //@ts-ignore
-  private _actions: Actions; // used to keep reference of actions, so they aren't gc'ed.
-  private _wrappedActions: WrappedActions<Actions, PassedMapType> =
-    {} as WrappedActions<Actions, PassedMapType>;
+  private _actions!: ActionsInput;
+  
+  private _wrappedActions: InternalWrappedActions<ActionsInput, State> = {} as any; 
+  
   private _state: State = {} as State;
   private _stateSetCallback: Function = () => {};
   private _loggingEnabled: boolean = true;
@@ -71,9 +68,9 @@ class Staction<
   private _postMiddleware: StactionMiddleware[] = [];
 
   async init(
-    actions: Actions,
-    initFunc: (actions: WrappedActions<Actions, PassedMapType>) => Promise<State> | State,
-    stateSetCallback: (state: State, actions: WrappedActions<Actions, PassedMapType>) => void
+    actions: ActionsInput,
+    initFunc: (actions: any) => Promise<State> | State,
+    stateSetCallback: (state: State, actions: any) => void
   ) {
     if (this._initState !== 'uninitialized') {
       let errorMsg = '';
@@ -91,32 +88,25 @@ class Staction<
           break;
       }
       const err = new Error(errorMsg);
-      console.error(err); // Maintain original behavior of logging this type of error
-      throw err; // Throw the error, _initState remains unchanged by this block
+      console.error(err); 
+      throw err; 
     }
     
     try {
       this._initState = 'initializing';
-
-      /* set state callback, most likely a setState React method */
       this._stateSetCallback = stateSetCallback;
       
-      /* wrap actions */
       this._wrappedActions = Object.entries(actions).reduce(
         (acc, [name, actionFunc]) => {
-          acc[name] = (...args: any) =>
+          (acc as any)[name as keyof ActionsInput] = (...args: any[]) => 
             this.actionWrapper(name, actionFunc, ...args);
           return acc;
         },
-        {} as { [s: string]: Function }
-      ) as WrappedActions<Actions, PassedMapType>;
+        {} as InternalWrappedActions<ActionsInput, State>
+      );
 
-      /* Keep reference to actions */
       this._actions = actions;
-
-
-      /* Set initial state from init function, awaiting it if it's a promise */
-      const initialStateCandidate = initFunc(this._wrappedActions);
+      const initialStateCandidate = initFunc(this._wrappedActions as any);
       if (isPromise(initialStateCandidate)) {
         this._state = await initialStateCandidate;
       } else {
@@ -124,16 +114,14 @@ class Staction<
       }
 
       this._initState = 'initialized';
-      // Do NOT call _stateSetCallback here after init. It's called by actions.
     } catch (e) {
-      // This catch is for errors during the actual initialization process
       this._initState = 'initerror';
       console.error(e);
       throw e;
     }
   }
 
-  get actions(): WrappedActions<Actions, PassedMapType> {
+  get actions(): InternalWrappedActions<ActionsInput, State> {
     return this._wrappedActions;
   }
 
@@ -153,13 +141,11 @@ class Staction<
     return this._state;
   };
 
-  /* injects state and actions as args into actions that are called. */
   async actionWrapper(
     name: string,
-    func: Function,
+    func: Function, 
     ...args: any[]
-  ): Promise<{ state: State; passed: PassedMapType }> {
-    // call the action function with correct args.
+  ): Promise<{ state: State; aux: any | undefined }> {
     if (this._loggingEnabled) {
       if (this._addStateToLogs) {
         console.log('action: ', name, this._state);
@@ -168,54 +154,44 @@ class Staction<
       }
     }
 
-    let passedMap: PassedMapType = new Map() as PassedMapType;
+    let auxData: any | undefined = undefined;
 
-    const updatePassedMap = (
-      updater: PassedMapType | ((currentMap: PassedMapType) => PassedMapType)
+    const updateAuxData = (
+      valueOrUpdater: any | ((currentValue: any | undefined) => any)
     ) => {
-      if (typeof updater === 'function') {
-        passedMap = (updater as Function)(passedMap);
+      if (typeof valueOrUpdater === 'function') {
+        auxData = (valueOrUpdater as Function)(auxData);
       } else {
-        if (updater instanceof Map) {
-          // Assuming updater is a Map, merge its contents
-          for (const [key, value] of (updater as Map<any, any>).entries()) {
-            (passedMap as Map<any, any>).set(key, value);
-          }
-        } else {
-          throw new Error('Invalid updater type. Must be a function or a Map.');
-        }
+        auxData = valueOrUpdater;
       }
     };
 
     const params = {
       state: this.getState,
-      actions: this._wrappedActions,
-      passed: updatePassedMap,
+      actions: this._wrappedActions as any, 
+      aux: updateAuxData,
       name: name,
     };
 
     try {
       await this.processMiddleware(this._preMiddleware, name, args);
-
       const newState = func(params, ...args);
-
       await this.handleActionReturnTypes(newState);
-
       await this.processMiddleware(this._postMiddleware, name, args);
 
-      if (!isGeneratorFunction(newState) && !isAsyncGeneratorFunction(newState)) {
-        // setState callback is called whenever a generator function yields.
-        // Or when a normal action/promise resolves.
+      if (
+        !isGeneratorFunction(newState) &&
+        !isAsyncGeneratorFunction(newState)
+      ) {
         this.callSetStateCallback(this._state);
       }
 
-      return { state: this._state, passed: passedMap };
+      return { state: this._state, aux: auxData };
     } catch (e) {
       throw e;
     }
   }
 
-  /* handles standard values, promises (from async functions) and generator function return values */
   handleActionReturnTypes = async (newState: any): Promise<void> => {
     try {
       if (isPromise(newState)) {
@@ -227,7 +203,6 @@ class Staction<
           this.callSetStateCallback(this._state);
           result = newState.next();
         }
-        // Process the final return value if it exists
         if (result.value !== undefined) {
           await this.handleActionReturnTypes(result.value);
           this.callSetStateCallback(this._state);
@@ -239,7 +214,6 @@ class Staction<
           this.callSetStateCallback(this._state);
           result = await newState.next();
         }
-        // Process the final return value
         if (result.value !== undefined) {
           await this.handleActionReturnTypes(result.value);
           this.callSetStateCallback(this._state);
@@ -271,14 +245,13 @@ class Staction<
         const mReturnedValue = m.method(params);
         let mStateToProcess;
 
-        // If middleware returns raw undefined (not a promise/generator that might resolve to undefined),
-        // interpret it as implicitly returning the current state, aligning with the philosophy
-        // that middleware should always yield a state.
-        if (mReturnedValue === undefined &&
-            !isPromise(mReturnedValue) && // Redundant check if === undefined, but good for clarity
-            !isGeneratorFunction(mReturnedValue) &&
-            !isAsyncGeneratorFunction(mReturnedValue)) {
-            mStateToProcess = params.state(); // Pass current state along
+        if (
+          mReturnedValue === undefined &&
+           !isPromise(mReturnedValue) && 
+           !isGeneratorFunction(mReturnedValue) &&
+           !isAsyncGeneratorFunction(mReturnedValue)
+        ) {
+           mStateToProcess = params.state();
         } else {
             mStateToProcess = mReturnedValue;
         }
@@ -288,29 +261,31 @@ class Staction<
     }
   };
 
-  /* Calls the setState callback */
   callSetStateCallback = (newState: State) => {
-    // call the callback specified in the init method.
-    // NOTE: can do a check to see if state has been changed.
     this._state = newState;
-    this._stateSetCallback(this._state, this._wrappedActions);
+    this._stateSetCallback(this._state, this._wrappedActions as any);
   };
 
   setMiddleware = (middleware: StactionMiddleware[]) => {
-    const grouped = middleware.reduce<{ pre: StactionMiddleware[], post: StactionMiddleware[] }>((acc, mw) => {
-      if (mw.type === 'pre') {
-        acc.pre.push(mw);
-      } else if (mw.type === 'post') {
-        acc.post.push(mw);
-      }
-      return acc;
-    }, { pre: [], post: [] });
+    const grouped = middleware.reduce<{
+      pre: StactionMiddleware[];
+      post: StactionMiddleware[];
+    }>(
+      (acc, mw) => {
+        if (mw.type === 'pre') {
+          acc.pre.push(mw);
+        } else if (mw.type === 'post') {
+          acc.post.push(mw);
+        }
+        return acc;
+      },
+      { pre: [], post: [] }
+    );
 
     this._preMiddleware = grouped.pre;
     this._postMiddleware = grouped.post;
   };
 
-  /* Debugging assist methods */
   enableLogging = () => {
     this._loggingEnabled = true;
     return `Staction logging is enabled`;

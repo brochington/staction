@@ -1,52 +1,50 @@
 export type InitState = 'uninitialized' | 'initializing' | 'initialized' | 'initerror';
 
-export type WrappedParamAction<Actions> = {
-  [Action in keyof Actions]: Actions[Action] extends (
-    params: any,
-    ...args: infer Args
-  ) => infer R
-    ? (...args: Args) => Promise<R>
-    : never;
-};
+// Rename PassedValueUpdater to AuxValueUpdater and PData to AuxData
+export type AuxValueUpdater<AuxData> = (
+  valueOrUpdater: AuxData | ((currentValue: AuxData | undefined) => AuxData)
+) => void;
 
-export interface ActionParams<State, Actions extends object, PassedMapType = Map<any, any>> {
-  state: () => State;
-  actions: WrappedActions<State, Actions, PassedMapType>;
-  passed: (
-    updater: PassedMapType | ((currentMap: PassedMapType) => PassedMapType)
-  ) => void;
+// Old PassedUpdater for Map - to be removed
+// export type PassedUpdater<PMap> = (
+//   updater: PMap | ((currentMap: PMap) => PMap)
+// ) => void;
+
+// PMap is the PassedMapType specific to THIS action.
+export interface ActionParams<
+  CurrentState,
+  // AllUserActions is the type of the original user-defined actions object, e.g. typeof myActions
+  // It needs to conform to the structure expected by StactionActions for inference.
+  AllUserActions extends UserActions<CurrentState, AllUserActions>,
+  AuxData = any // Renamed PData to AuxData
+> {
+  state: () => CurrentState;
+  actions: StactionActions<CurrentState, AllUserActions>; // The fully typed staction.actions object
+  aux: AuxValueUpdater<AuxData>; // Renamed passed to aux
   name: string;
 }
 
-// Helper type to perform the actual wrapping of an action function
-type WrapAction<
-  State,
-  ActionsObject extends object, // The full object/map of all actions
-  PassedMapType,
-  F // The specific action function type from ActionsObject[K]
-> = F extends (
-  // Check if F matches the expected signature for an action
-  params: ActionParams<State, ActionsObject, PassedMapType>,
-  ...args: infer Args // Capture the ...rest arguments of the original action
-) => any // Original return type (can be anything)
-  // If it matches, the wrapped action has this signature:
-  ? (...args: Args) => Promise<{ state: State; passed: PassedMapType }>
-  // If F doesn't match the expected signature, it becomes 'never'
-  : never;
-
-// Main WrappedActions type (simplified for non-optional actions)
-export type WrappedActions<
-  State,
-  ActionsObject extends object, // Your map of action names to action functions
-  PassedMapType = Map<any, any>
+// Defines the type of the `staction.actions` object and actions passed into initFunc/setStateCallbacks
+export type StactionActions<
+  CurrentState,
+  UserActionsObject extends UserActions<CurrentState, UserActionsObject> // Constrain UserActionsObject here
 > = {
-  // For each key K in ActionsObject
-  [K in keyof ActionsObject]: WrapAction< // Apply the WrapAction helper
-    State,
-    ActionsObject,
-    PassedMapType,
-    ActionsObject[K] // Pass the specific action function ActionsObject[K] as F
-  >;
+  [K in keyof UserActionsObject]: UserActionsObject[K] extends (
+    params: ActionParams<CurrentState, UserActionsObject, infer AuxData_K>, // Infer AuxData_K
+    ...args: infer Args_K
+  ) => any
+    ? (...args: Args_K) => Promise<{ state: CurrentState; aux: AuxData_K | undefined }> // Renamed passed to aux
+    : never;
+};
+
+// Describes the type for the 'actions' object that the user provides to staction.init()
+// Self is the type of the actions object itself, e.g., `typeof myActions`
+export type UserActions<CurrentState, Self extends UserActions<CurrentState, Self>> = {
+  [K in keyof Self]: (
+    // Self, due to the new constraint, now satisfies the requirement for ActionParams' AllUserActions generic
+    params: ActionParams<CurrentState, Self, any>, // ActionParams now uses AuxData
+    ...args: any[]
+  ) => any;
 };
 
 interface StactionMiddleware {
@@ -62,10 +60,17 @@ export interface StactionMiddlewareParams<State, Meta = object> {
   meta: Meta
 }
 
-declare class Staction<State, Actions extends object, PassedMapType = Map<any, any>> {
+// Update Staction class declaration
+declare class Staction<
+  State,
+  // ActionsInput is the type of the raw actions object passed to init()
+  // e.g., const myActions: UserActions<MyState, typeof myActions> = { ... }
+  ActionsInput extends UserActions<State, ActionsInput>
+> {
   constructor();
 
-  public actions: WrappedActions<State, Actions, PassedMapType>;
+  // staction.actions will be of type StactionActions<State, ActionsInput>
+  public actions: StactionActions<State, ActionsInput>;
 
   public state: State;
 
@@ -79,7 +84,12 @@ declare class Staction<State, Actions extends object, PassedMapType = Map<any, a
 
   setMiddleware(middleware: StactionMiddleware[]): void;
 
-  init(actions: Actions, initFunc: (actions: WrappedActions<State, Actions, PassedMapType>) => Promise<State> | State, stateSetCallback: (state: State, actions: WrappedActions<State, Actions, PassedMapType>) => void): Promise<void>;
+  init(
+    actions: ActionsInput,
+    // initFunc and stateSetCallback should expect fully typed StactionActions
+    initFunc: (actions: StactionActions<State, ActionsInput>) => Promise<State> | State,
+    stateSetCallback: (state: State, actions: StactionActions<State, ActionsInput>) => void
+  ): Promise<void>;
 
   get initialized(): boolean;
 

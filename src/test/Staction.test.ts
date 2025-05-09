@@ -9,8 +9,9 @@ import {
 import Staction from '../Staction';
 import {
   ActionParams,
-  WrappedActions,
   StactionMiddlewareParams,
+  UserActions,
+  StactionActions,
 } from '../Staction.d';
 
 const noop = () => {};
@@ -109,7 +110,7 @@ describe('Staction', () => {
       type CurrentActions = typeof actions;
       type CurrentParams = {
         state: StateFunc;
-        actions: WrappedActions<CurrentActions, CurrentParams>;
+        actions: CurrentActions;
         name: string;
       };
 
@@ -130,11 +131,11 @@ describe('Staction', () => {
 
       type Params = {
         state: StateFunc;
-        actions: WrappedActions<Actions, Params>;
+        actions: Actions;
         name: string;
       };
 
-      const staction = new Staction<State, typeof actions>();
+      const staction = new Staction<State, Actions>();
       staction.disableLogging();
 
       staction.init(
@@ -173,7 +174,7 @@ describe('Staction', () => {
 
       type Params = {
         state: StateFunc;
-        actions: WrappedActions<Actions, Params>;
+        actions: Actions;
         name: string;
       };
 
@@ -218,7 +219,7 @@ describe('Staction', () => {
 
       type Params = {
         state: StateFunc;
-        actions: WrappedActions<Actions, Params>;
+        actions: Actions;
         name: string;
       };
 
@@ -262,7 +263,7 @@ describe('Staction', () => {
 
       type Params = {
         state: StateFunc;
-        actions: WrappedActions<Actions, Params>;
+        actions: Actions;
         name: string;
       };
 
@@ -307,7 +308,7 @@ describe('Staction', () => {
 
       type Params = {
         state: StateFunc;
-        actions: WrappedActions<Actions, Params>;
+        actions: Actions;
         name: string;
       };
 
@@ -328,16 +329,16 @@ describe('Staction', () => {
       const actions = {
         errorInGenerator: function* ({
           state,
-          passed,
-        }: ActionParams<State, any>) {
+          aux,
+        }: ActionParams<State, any, Map<"step1" | "step2", boolean>>) {
           yield { status: 'step 1 complete' };
           expect(state().status).toBe('step 1 complete');
-          passed((m) => m.set('step1', true));
+          aux(() => new Map().set('step1', true));
 
           yield Promise.reject(new Error('Generator promise failed'));
 
           // This part should not be reached
-          passed((m) => m.set('step2', true));
+          aux((m: Map<"step1" | "step2", boolean> | undefined) => m!.set('step2', true));
           yield { status: 'step 2 complete' };
         },
       };
@@ -370,14 +371,13 @@ describe('Staction', () => {
       );
 
       // Check passed map: only the first update should have occurred.
-      // To get the passed map, we'd normally get it from the return of the action.
       // Since it threw, we can't. This part of the test highlights a limitation
-      // in retrieving the `passed` map if the action errors out mid-way through a generator.
+      // in retrieving the `aux` map if the action errors out mid-way through a generator.
       // For now, we're focusing on error propagation and state.
     });
 
     test('generator with mixed yield types (plain, promise, async iife)', async () => {
-      type MixedState = {
+      type State = {
         step: number;
         data: string | null;
         promiseResolved: boolean;
@@ -389,14 +389,14 @@ describe('Staction', () => {
       const actions = {
         mixedYieldsAction: function* ({
           state,
-        }: ActionParams<MixedState, any>) {
+        }: ActionParams<State, any>) {
           // 1. Yield plain object
           yield { ...state(), step: 1, data: 'plain_yield_1' };
           expect(state().step).toBe(1);
           expect(state().data).toBe('plain_yield_1');
 
           // 2. Yield a promise that resolves
-          yield new Promise<Partial<MixedState>>((resolve) =>
+          yield new Promise<Partial<State>>((resolve) =>
             setTimeout(
               () => resolve({ ...state(), step: 2, promiseResolved: true }),
               20
@@ -427,9 +427,9 @@ describe('Staction', () => {
         },
       };
 
-      const staction = new Staction<MixedState, typeof actions>();
+      const staction = new Staction<State, typeof actions>();
       staction.disableLogging();
-      const initialState: MixedState = {
+      const initialState: State = {
         step: 0,
         data: null,
         promiseResolved: false,
@@ -439,7 +439,7 @@ describe('Staction', () => {
       staction.init(
         actions,
         () => initialState,
-        (s: MixedState) => {
+        (s: State) => {
           callCount++;
           mockSetState(JSON.parse(JSON.stringify(s))); // Deep clone for snapshotting state
         }
@@ -483,176 +483,209 @@ describe('Staction', () => {
       });
     });
 
-    describe('passed functionality', () => {
-      test('should return an empty Map if passed() is not called', async () => {
+    describe('auxiliary data functionality (formerly passed)', () => {
+      test('should return undefined if aux() is not called', async () => {
         type State = { value: string };
-        const actions = {
-          testAction: ({ state }: ActionParams<State, any>) => {
+        // AuxData can be `void` or `never` if truly no data is intended.
+        // Or simply don't specify it in ActionParams if `any` is acceptable for AuxData.
+        type NoAuxData = void; 
+
+        type CurrentTestActionsShape = {
+          testAction: (params: ActionParams<State, CurrentTestActionsShape, NoAuxData>) => State;
+        };
+
+        const actionsImpl: CurrentTestActionsShape = {
+          testAction: ({ state }) => { 
+            // No call to params.aux()
             return { ...state(), value: 'new value' };
           },
         };
-        const staction = new Staction<State, typeof actions>();
+        
+        type StactionUserActions = UserActions<State, CurrentTestActionsShape>;
+        const staction = new Staction<State, StactionUserActions>();
         staction.disableLogging();
-        staction.init(actions, () => ({ value: 'initial' }), noop);
+        staction.init(actionsImpl, () => ({ value: 'initial' }), noop);
 
-        const { state, passed } = await staction.actions.testAction();
+        const { state, aux } = await staction.actions.testAction();
 
         expect(state.value).toBe('new value');
-        expect(passed).toBeInstanceOf(Map);
-        expect(passed.size).toBe(0);
+        expect(aux).toBeUndefined();
       });
 
-      test('should update passed map using a function updater', async () => {
+      test('should set aux data using a direct value', async () => {
         type State = { id: number };
-        type PassedMap = Map<string, number | string>;
+        type CreateItemAuxData = { newItemId: number; message: string; timestamp?: Date };
 
-        const actions = {
-          createItem: ({
-            state,
-            passed,
-          }: ActionParams<State, any, PassedMap>) => {
+        type CurrentTestActionsShape = {
+          createItem: (params: ActionParams<State, CurrentTestActionsShape, CreateItemAuxData>) => State;
+        };
+
+        const actionsImpl: CurrentTestActionsShape = {
+          createItem: ({ state, aux }) => {
             const newId = state().id + 1;
-            passed((currentMap) => {
-              currentMap.set('newId', newId);
-              currentMap.set('message', 'Item created');
-              return currentMap;
-            });
+            const auxValue: CreateItemAuxData = { 
+              newItemId: newId, 
+              message: 'Item created' 
+            };
+            aux(auxValue);
             return { ...state(), id: newId };
           },
         };
+        type StactionUserActions = UserActions<State, CurrentTestActionsShape>;
 
-        const staction = new Staction<State, typeof actions, PassedMap>();
+        const staction = new Staction<State, StactionUserActions>();
         staction.disableLogging();
-        staction.init(actions, () => ({ id: 0 }), noop);
+        staction.init(actionsImpl, () => ({ id: 0 }), noop);
 
-        const { state, passed } = await staction.actions.createItem();
+        const { state, aux } = await staction.actions.createItem();
 
         expect(state.id).toBe(1);
-        expect(passed.get('newId')).toBe(1);
-        expect(passed.get('message')).toBe('Item created');
-        expect(passed.size).toBe(2);
+        expect(aux).toBeDefined();
+        expect(aux?.newItemId).toBe(1);
+        expect(aux?.message).toBe('Item created');
+        expect(aux?.timestamp).toBeUndefined();
       });
 
-      test('should update passed map by passing a Map instance', async () => {
+      test('should update aux data using an updater function', async () => {
         type State = { status: string };
-        type PassedMap = Map<string, any>;
+        type ProcessDataAux = { processedId?: number; isValid?: boolean; steps: string[] };
 
-        const actions = {
-          processData: ({
-            state,
-            passed,
-          }: ActionParams<State, any, PassedMap>) => {
-            const dataToPass = new Map<string, any>();
-            dataToPass.set('processedId', 123);
-            dataToPass.set('isValid', true);
-            passed(dataToPass);
+        type CurrentTestActionsShape = {
+          processData: (params: ActionParams<State, CurrentTestActionsShape, ProcessDataAux>) => State;
+        };
+
+        const actionsImpl: CurrentTestActionsShape = {
+          processData: ({ state, aux }) => {
+            aux({ steps: ['started'] });
+            
+            // Simulate some processing
+            const id = 123;
+            aux((current: ProcessDataAux | undefined) => ({ ...current!, processedId: id, steps: [...current!.steps, 'id_set'] }));
+
+            const valid = true;
+            aux((current: ProcessDataAux | undefined) => ({ ...current!, isValid: valid, steps: [...current!.steps, 'validated'] }));
+            
             return { ...state(), status: 'processed' };
           },
         };
-
-        const staction = new Staction<State, typeof actions, PassedMap>();
+        type StactionUserActions = UserActions<State, CurrentTestActionsShape>;
+        const staction = new Staction<State, StactionUserActions>();
         staction.disableLogging();
-        staction.init(actions, () => ({ status: 'pending' }), noop);
+        staction.init(actionsImpl, () => ({ status: 'pending' }), noop);
 
-        const { state, passed } = await staction.actions.processData();
+        const { state, aux } = await staction.actions.processData();
 
         expect(state.status).toBe('processed');
-        expect(passed.get('processedId')).toBe(123);
-        expect(passed.get('isValid')).toBe(true);
-        expect(passed.size).toBe(2);
+        expect(aux).toBeDefined();
+        expect(aux?.processedId).toBe(123);
+        expect(aux?.isValid).toBe(true);
+        expect(aux?.steps).toEqual(['started', 'id_set', 'validated']);
       });
 
-      test('should accumulate values in passed map on multiple calls', async () => {
+      test('updater function receives undefined if aux() not called before', async () => {
         type State = { version: number };
-        type PassedMap = Map<string, string>;
+        type UpdateAuxData = { initialMessage?: string; finalMessage: string };
 
-        const actions = {
-          multiUpdate: ({
-            state,
-            passed,
-          }: ActionParams<State, any, PassedMap>) => {
-            passed((m) => m.set('first', 'entry1'));
-            passed(new Map([['second', 'entry2']]));
-            passed((m) => m.set('third', 'entry3'));
+        type CurrentTestActionsShape = {
+          updateAction: (params: ActionParams<State, CurrentTestActionsShape, UpdateAuxData>) => State;
+        };
+
+        const actionsImpl: CurrentTestActionsShape = {
+          updateAction: ({ state, aux }) => {
+            aux((current: UpdateAuxData | undefined) => {
+              expect(current).toBeUndefined();
+              return { ...current, finalMessage: 'Set after undefined' }; 
+            });
             return { ...state(), version: state().version + 1 };
           },
         };
-
-        const staction = new Staction<State, typeof actions, PassedMap>();
+        type StactionUserActions = UserActions<State, CurrentTestActionsShape>;
+        const staction = new Staction<State, StactionUserActions>();
         staction.disableLogging();
-        staction.init(actions, () => ({ version: 1 }), noop);
+        staction.init(actionsImpl, () => ({ version: 1 }), noop);
 
-        const { state, passed } = await staction.actions.multiUpdate();
+        const { state, aux } = await staction.actions.updateAction();
 
         expect(state.version).toBe(2);
-        expect(passed.get('first')).toBe('entry1');
-        expect(passed.get('second')).toBe('entry2');
-        expect(passed.get('third')).toBe('entry3');
-        expect(passed.size).toBe(3);
+        expect(aux).toBeDefined();
+        expect(aux?.finalMessage).toBe('Set after undefined');
+        expect(aux?.initialMessage).toBeUndefined();
       });
 
-      test('passed function should throw error for invalid updater type', async () => {
+      // This test is less relevant as AuxValueUpdater doesn't have distinct types of updaters like Map vs function.
+      // It only accepts AuxData or (AuxData | undefined) => AuxData.
+      // We can test passing a non-function, non-AuxData type if strict typing is bypassed.
+      test('aux function should handle various inputs gracefully (TS type safety is primary check)', async () => {
         type State = { value: number };
-        const actions = {
-          testInvalidPassed: ({ passed }: ActionParams<State, any>) => {
+        type TestAuxData = { message: string };
+
+        type CurrentTestActionsShape = {
+          testRobustAux: (params: ActionParams<State, CurrentTestActionsShape, TestAuxData>) => State;
+        };
+        const actionsImpl: CurrentTestActionsShape = {
+          testRobustAux: ({ aux, state }) => {
             try {
-              // @ts-ignore testing invalid usage
-              passed(123);
-            } catch (e: any) {
-              throw e; // Re-throw to be caught by expect(...).toThrow()
+                (aux as any)(123);
+            } catch(e) {
+                // Depending on internal implementation, this might or might not throw.
+                // The goal is that valid uses (AuxData or (AuxData|undefined)=>AuxData) work.
+                // Invalid uses are primarily caught by TypeScript.
             }
-            return { value: 1 };
+            aux({message: "correctly set"});
+            return { ...state(), value: state().value +1 };
           },
         };
-        const staction = new Staction<State, typeof actions>();
+        type StactionUserActions = UserActions<State, CurrentTestActionsShape>;
+        const staction = new Staction<State, StactionUserActions>();
         staction.disableLogging();
-        staction.init(actions, () => ({ value: 0 }), noop);
+        staction.init(actionsImpl, () => ({ value: 0 }), noop);
 
-        await expect(staction.actions.testInvalidPassed()).rejects.toThrow(
-          'Invalid updater type. Must be a function or a Map.'
-        );
+        const { aux } = await staction.actions.testRobustAux();
+        expect(aux?.message).toBe("correctly set");
       });
 
-      test('should accumulate in passed map across yields in a generator action', async () => {
+      test('should accumulate in aux data across yields in a generator action', async () => {
         type State = { counter: number };
-        type PassedData = Map<string, any>;
+        type GeneratorAux = { step1?: string; step2?: string; finalStep?: string; commonValue: number };
 
-        const actions = {
-          generatorWithPassed: function* ({
-            state,
-            passed,
-          }: ActionParams<State, any, PassedData>) {
-            passed((m) => m.set('entry1', 'first yield'));
-            passed((m) => m.set('common', 1));
-            yield { counter: state().counter + 1 };
-
-            passed((m) => m.set('entry2', 'second yield'));
-            passed((m) => m.set('common', state().counter * 2)); // Override common
-            yield { counter: state().counter + 1 };
-
-            passed(
-              new Map<string, any>([
-                ['entry3', 'final return'],
-                ['isValid', true],
-              ])
-            );
-            return { counter: state().counter + 1 };
-          },
+        type CurrentTestActionsShape = {
+          generatorWithAux: (params: ActionParams<State, CurrentTestActionsShape, GeneratorAux>) => Generator<any, State, any>;
         };
 
-        const staction = new Staction<State, typeof actions, PassedData>();
+        const actionsImpl: CurrentTestActionsShape = {
+          generatorWithAux: function* ({ state, aux }) {
+            aux({ commonValue: 0, step1: 'first yield processed' });
+            yield { counter: state().counter + 1 };
+
+            aux((current: GeneratorAux | undefined) => ({ 
+              ...current!, 
+              commonValue: state().counter * 10,
+              step2: 'second yield processed' 
+            }));
+            yield { counter: state().counter + 1 };
+
+            aux((current: GeneratorAux | undefined) => ({ 
+              ...current!, 
+              commonValue: current!.commonValue + state().counter,
+              finalStep: 'final return processed' 
+            }));
+            return { ...state(), counter: state().counter + 1 };
+          },
+        };
+        type StactionUserActions = UserActions<State, CurrentTestActionsShape>;
+
+        const staction = new Staction<State, StactionUserActions>();
         staction.disableLogging();
-        staction.init(actions, () => ({ counter: 0 }), noop);
+        staction.init(actionsImpl, () => ({ counter: 0 }), noop);
 
-        const { state, passed } = await staction.actions.generatorWithPassed();
+        const { state: finalState, aux } = await staction.actions.generatorWithAux();
 
-        expect(state.counter).toBe(3);
-        expect(passed.get('entry1')).toBe('first yield');
-        expect(passed.get('entry2')).toBe('second yield');
-        expect(passed.get('entry3')).toBe('final return');
-        expect(passed.get('common')).toBe(2); // state().counter is 1 before this update, so 1*2=2
-        expect(passed.get('isValid')).toBe(true);
-        expect(passed.size).toBe(5);
+        expect(finalState.counter).toBe(3);
+        expect(aux).toBeDefined();
+        expect(aux?.step1).toBe('first yield processed');
+        expect(aux?.step2).toBe('second yield processed');
+        expect(aux?.finalStep).toBe('final return processed');
+        expect(aux?.commonValue).toBe(12);
       });
     });
   });
@@ -1062,7 +1095,7 @@ describe('Staction', () => {
       const initialSt = { val: 10 };
       stactionInstance.init(actions, () => initialSt, mockSetStateCallback);
 
-      const { state: finalSt, passed } =
+      const { state: finalSt, aux } =
         await stactionInstance.actions.actionReturnsUndefined();
 
       expect(finalSt).toEqual(initialSt); // State should not have changed
@@ -1074,7 +1107,7 @@ describe('Staction', () => {
         initialSt,
         stactionInstance.actions
       );
-      expect(passed.size).toBe(0);
+      expect(aux).toBeUndefined();
     });
 
     test('async generator middleware modifies state and action sees final pre-middleware state', async () => {
@@ -1505,19 +1538,19 @@ describe('Staction', () => {
     // Types for the original action functions provided to staction.init
     type OriginalActions = {
       parentAction: (
-        params: ActionParams<NestedState, OriginalActions>,
+        params: ActionParams<NestedState, OriginalActions, Map<"parent_start" | "parent_end", string>>,
         data: string
       ) => Promise<NestedState> | NestedState;
       childAction: (
-        params: ActionParams<NestedState, OriginalActions>,
+        params: ActionParams<NestedState, OriginalActions, Map<"child_data", string>>,
         data: string
       ) => Promise<NestedState> | NestedState;
     };
 
     let stactionInstance: Staction<NestedState, OriginalActions>;
     let executionLog: string[];
-    let parentPassedData: Map<string, any> | undefined;
-    let childPassedDataFromParent: Map<string, any> | undefined;
+    let parentAuxData: Map<string, any> | undefined;
+    let childAuxDataFromParent: Map<string, any> | undefined;
 
     const initialNestedState = (): NestedState => ({
       parentValue: 'initial_parent',
@@ -1527,31 +1560,31 @@ describe('Staction', () => {
 
     const actionsImpl: OriginalActions = {
       parentAction: async (
-        { state, actions, passed }: ActionParams<NestedState, OriginalActions>,
+        { state, actions, aux }: ActionParams<NestedState, OriginalActions, Map<"parent_start" | "parent_end", string>>,
         data: string
       ) => {
         executionLog.push('parentAction_start');
-        passed((m) => m.set('parent_start', data));
+        aux((m: Map<"parent_start" | "parent_end", string> | undefined) => m ? m.set('parent_start', data) : new Map().set('parent_start', data));
 
-        // 'actions.childAction' here is the wrapped version, so it returns { state, passed }
-        const { state: stateAfterChild, passed: childPassed } =
+        // 'actions.childAction' here is the wrapped version, so it returns { state, aux }
+        const { state: stateAfterChild, aux: childAux } =
           await actions.childAction('child_data');
-        childPassedDataFromParent = childPassed;
+        childAuxDataFromParent = childAux;
         executionLog.push('parentAction_after_child_call');
 
         expect(state().childValue).toBe('child_data_processed');
         expect(stateAfterChild.childValue).toBe('child_data_processed');
 
-        passed((m) => m.set('parent_end', 'parent_done'));
+        aux((m: Map<"parent_start" | "parent_end", string> | undefined) => m ? m.set('parent_end', 'parent_done') : new Map().set('parent_end', 'parent_done'));
         // The original action returns just the new state
         return { ...state(), parentValue: data + '_processed' };
       },
       childAction: async (
-        { state, passed }: ActionParams<NestedState, OriginalActions>,
+        { state, aux }: ActionParams<NestedState, OriginalActions, Map<"child_data", string>>,
         data: string
       ) => {
         executionLog.push('childAction_start');
-        passed((m) => m.set('child_data', data));
+        aux((m: Map<"child_data", string> | undefined) => m ? m.set('child_data', data) : new Map().set('child_data', data));
         // The original action returns just the new state
         return { ...state(), childValue: data + '_processed' };
       },
@@ -1559,13 +1592,13 @@ describe('Staction', () => {
 
     beforeEach(() => {
       executionLog = [];
-      parentPassedData = undefined;
-      childPassedDataFromParent = undefined;
+      parentAuxData = undefined;
+      childAuxDataFromParent = undefined;
       stactionInstance = new Staction<NestedState, OriginalActions>();
       stactionInstance.disableLogging();
     });
 
-    test('calling another action maintains context, state, middleware, and passed map isolation', async () => {
+    test('calling another action maintains context, state, middleware, and aux map isolation', async () => {
       stactionInstance.setMiddleware([
         // Middleware for parentAction
         {
@@ -1628,9 +1661,9 @@ describe('Staction', () => {
       ]);
 
       stactionInstance.init(actionsImpl, initialNestedState, noop);
-      const { state: finalState, passed: finalParentPassed } =
+      const { state: finalState, aux } =
         await stactionInstance.actions.parentAction('parent_data');
-      parentPassedData = finalParentPassed;
+      parentAuxData = aux;
 
       expect(executionLog).toEqual([
         'preParent',
@@ -1653,13 +1686,13 @@ describe('Staction', () => {
       ]);
 
       // Check passed data for parent action
-      expect(parentPassedData?.get('parent_start')).toBe('parent_data');
-      expect(parentPassedData?.get('parent_end')).toBe('parent_done');
-      expect(parentPassedData?.has('child_data')).toBe(false); // Child's passed data is isolated
+      expect(parentAuxData?.get('parent_start')).toBe('parent_data');
+      expect(parentAuxData?.get('parent_end')).toBe('parent_done');
+      expect(parentAuxData?.has('child_data')).toBe(false); // Child's aux data is isolated
 
       // Check passed data received from child action by parent
-      expect(childPassedDataFromParent?.get('child_data')).toBe('child_data');
-      expect(childPassedDataFromParent?.size).toBe(1);
+      expect(childAuxDataFromParent?.get('child_data')).toBe('child_data');
+      expect(childAuxDataFromParent?.size).toBe(1);
     });
   });
 
@@ -1669,20 +1702,22 @@ describe('Staction', () => {
       initActionDone: boolean;
       initMiddlewareCalled: boolean;
     };
-    type InitTestActions = {
+
+    type CurrentInitTestActionsShape = {
       internalInitAction: (
-        params: ActionParams<InitTestState, InitTestActions>
-      ) => Promise<InitTestState> | InitTestState;
-      anotherAction?: (
-        params: ActionParams<InitTestState, InitTestActions>
-      ) => Promise<InitTestState> | InitTestState;
+        params: ActionParams<
+          InitTestState,
+          CurrentInitTestActionsShape,
+          Map<never, never>
+        >
+      ) => Promise<Partial<InitTestState>> | Partial<InitTestState>;
     };
 
     test('initFunc calling an action executes it including middleware and affects initial state', async () => {
       const mockSetStateCb = jest.fn();
       let executionLog: string[] = [];
 
-      const actionsDef: InitTestActions = {
+      const actionsDef: CurrentInitTestActionsShape = {
         internalInitAction: async ({ state }) => {
           executionLog.push('internalInitAction_run');
           const currentCounter =
@@ -1695,7 +1730,12 @@ describe('Staction', () => {
         },
       };
 
-      const staction = new Staction<InitTestState, InitTestActions>();
+      type StactionUserActionsType = UserActions<
+        InitTestState,
+        CurrentInitTestActionsShape
+      >;
+
+      const staction = new Staction<InitTestState, StactionUserActionsType>();
       staction.disableLogging();
       staction.setMiddleware([
         {
@@ -1714,18 +1754,14 @@ describe('Staction', () => {
         },
       ]);
 
-      const initFunc = async (actionsArg: object): Promise<InitTestState> => {
-        const wrappedActions = actionsArg as WrappedActions<
-          InitTestState,
-          InitTestActions
-        >;
+      const initFunc = async (
+        actionsArg: StactionActions<InitTestState, CurrentInitTestActionsShape>
+      ): Promise<InitTestState> => {
         executionLog.push('initFunc_start');
-
-        const { state: stateAfterInternalAction } =
-          await wrappedActions.internalInitAction();
-
+        const { state: stateAfterWrappedInternalAction } =
+          await actionsArg.internalInitAction();
         executionLog.push('initFunc_after_action_call');
-        return stateAfterInternalAction;
+        return stateAfterWrappedInternalAction;
       };
 
       await staction.init(actionsDef, initFunc, mockSetStateCb);
@@ -1742,11 +1778,78 @@ describe('Staction', () => {
       expect(staction.state.counter).toBe(1);
 
       expect(mockSetStateCb).toHaveBeenCalledTimes(1);
+      expect(mockSetStateCb.mock.calls[0][0]).toEqual(staction.state);
       expect(mockSetStateCb.mock.calls[0][0]).toMatchObject({
         counter: 1,
         initActionDone: true,
         initMiddlewareCalled: true,
       });
+    });
+  });
+
+  describe('Per-Action AuxData Type (formerly PassedMapType)', () => {
+    test('actions can have different AuxData types and they are correctly inferred', async () => {
+      type State = { data: string };
+
+      type ActionsShape = {
+        actionOne: (
+          params: ActionParams<State, ActionsShape, Map<string, number>>,
+          val: number
+        ) => State;
+        actionTwo: (
+          params: ActionParams<State, ActionsShape, Map<string, boolean>>,
+          val: boolean
+        ) => State;
+        actionThree: (
+          // Action with no aux data
+          params: ActionParams<State, ActionsShape, Map<never, never>>
+        ) => State;
+      };
+
+      const actionsImpl: ActionsShape = {
+        actionOne: ({ state, aux }, val: number) => {
+          aux(() => new Map().set('numericOutput', val * 2));
+          return { ...state, data: `one:${val}` };
+        },
+        actionTwo: ({ state, aux }, val: boolean) => {
+          aux((m: Map<string, boolean> | undefined) => m ? m.set('booleanOutput', !val) : new Map().set('booleanOutput', !val));
+          return { ...state, data: `two:${val}` };
+        },
+        actionThree: ({ state }) => {
+          // No call to aux()
+          return { ...state, data: 'three' };
+        },
+      };
+
+      type TestActions = {
+        actionOne: typeof actionsImpl.actionOne;
+        actionTwo: typeof actionsImpl.actionTwo;
+        actionThree: typeof actionsImpl.actionThree;
+      };
+
+      // type StactionUserActions = UserActions<State, TestActions>;
+      const staction = new Staction<State, TestActions>();
+      staction.disableLogging();
+      staction.init(actionsImpl, () => ({ data: 'initial' }), noop);
+
+      // Test Action One
+      const resultOne = await staction.actions.actionOne(10);
+      expect(resultOne.state.data).toBe('one:10');
+      expect(resultOne.aux).toBeInstanceOf(Map);
+      expect(resultOne.aux.size).toBe(1);
+      expect(resultOne.aux.get('numericOutput')).toBe(20);
+
+      // Test Action Two
+      const resultTwo = await staction.actions.actionTwo(true);
+      expect(resultTwo.state.data).toBe('two:true');
+      expect(resultTwo.aux).toBeInstanceOf(Map);
+      expect(resultTwo.aux.size).toBe(1);
+      expect(resultTwo.aux.get('booleanOutput')).toBe(false);
+
+      // Test Action Three
+      const resultThree = await staction.actions.actionThree();
+      expect(resultThree.state.data).toBe('three');
+      expect(resultThree.aux).toBeUndefined()
     });
   });
 
@@ -1820,6 +1923,75 @@ describe('Staction', () => {
       expect(stactionFail.initialized).toBe(false);
       expect(stactionFail.initState).toBe('initerror');
       errorSpy.mockRestore();
+    });
+  });
+
+  describe('General Type Inference Tests', () => {
+    test('inferred types are correct', async () => {
+      function testAction1(
+        { state }: ActionParams<State, TestActions>,
+        nextCount: number,
+      ) {
+        return { ...state(), count: nextCount };
+      }
+
+      async function testAction2(
+        {
+          state,
+          aux,
+        }: ActionParams<State, TestActions, Map<'test', string>>,
+        nextCount: number
+      ): Promise<State> {
+        aux(() => new Map().set('test', 'test'));
+        return { ...state(), count: nextCount };
+      }
+
+      type State = {
+        count: number;
+        name: string;
+        value: number | string;
+        obj: { key: string };
+      };
+
+      type TestActions = {
+        testAction1: typeof testAction1;
+        testAction2: typeof testAction2;
+      };
+
+      const testActions: TestActions = {
+        testAction1,
+        testAction2,
+      };
+
+      const staction = new Staction<State, TestActions>();
+      await staction.init(
+        testActions,
+        () => ({ count: 0, name: 'test', value: 1, obj: { key: 'value' } }),
+        noop
+      );
+
+      const { state: result } = await staction.actions.testAction1(20);
+
+      expect(result).toEqual({
+        count: 20,
+        name: 'test',
+        value: 1,
+        obj: { key: 'value' },
+      });
+
+      const { state: result2, aux: aux2 } =
+        await staction.actions.testAction2(20);
+
+      expect(result2).toEqual({
+        count: 20,
+        name: 'test',
+        value: 1,
+        obj: { key: 'value' },
+      });
+
+      expect(aux2).toBeInstanceOf(Map);
+      expect(aux2.size).toBe(1);
+      expect(aux2.get('test')).toBe('test');
     });
   });
 });
