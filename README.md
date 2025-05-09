@@ -10,7 +10,7 @@ Because sometimes, all you really need is well-managed state and clearly defined
 *   **Async Powerhouse:** Seamlessly handle asynchronous operations with Promises, `async/await`, Generators, and Async Generators.
 *   **TypeScript First:** Excellent TypeScript support for robust, type-safe state management.
 *   **Middleware:** Extend functionality with `pre` and `post` action middleware for logging, API calls, etc.
-*   **"Passed" Data:** Actions can return auxiliary data alongside state changes using the `passed` map, perfect for things like new IDs or operation-specific status messages.
+*   **Auxiliary Data (`aux`):** Actions can return custom auxiliary data alongside state changes. This data can be of any type and is defined per action, perfect for things like new IDs, operation-specific status messages, or metadata.
 *   **Lightweight:** No unnecessary boilerplate, keeping your focus on your application logic.
 
 ## Quick Links
@@ -29,27 +29,28 @@ type AppState = {
   lastMessage?: string;
 };
 
-// Optional: Define a type for your "passed" data
-type AppPassedMap = Map<string, string | number>;
+// Optional: Define AuxData types for specific actions if they use `aux`
+type IncrementAux = { incrementedBy: number; timestamp: number };
+type SetMessageAux = { messageLength: number; setAt: number };
 
 // Define your action signatures
 type AppActions = {
-  increment: (params: ActionParams<AppState, AppActions, AppPassedMap>, amount?: number) => AppState;
-  setMessage: (params: ActionParams<AppState, AppActions, AppPassedMap>, newMessage: string) => Promise<AppState>;
+  increment: (params: ActionParams<AppState, AppActions, IncrementAux>, amount?: number) => AppState;
+  setMessage: (params: ActionParams<AppState, AppActions, SetMessageAux>, newMessage: string) => Promise<AppState>;
 };
 
 // 2. Create a Staction instance
-const staction = new Staction<AppState, AppActions, AppPassedMap>();
+const staction = new Staction<AppState, AppActions>();
 
 // 3. Implement your actions
 const actionsImpl: AppActions = {
-  increment: ({ state, passed }, amount = 1) => {
-    passed(map => map.set('incrementAmount', amount));
+  increment: ({ state, aux }, amount = 1) => {
+    aux({ incrementedBy: amount, timestamp: Date.now() });
     return { ...state(), count: state().count + amount };
   },
-  setMessage: async ({ state, passed }, newMessage) => {
+  setMessage: async ({ state, aux }, newMessage) => {
     await new Promise(resolve => setTimeout(resolve, 50)); // Simulate async work
-    passed(map => map.set('messageSetAt', Date.now()));
+    aux({ messageLength: newMessage.length, setAt: Date.now() });
     return { ...state(), lastMessage: newMessage };
   },
 };
@@ -76,13 +77,13 @@ async function main() {
     console.log('Is initialized:', staction.initialized);
 
     // 7. Dispatch actions
-    const { state: stateAfterIncrement, passed: passedFromIncrement } = await staction.actions.increment(5);
+    const { state: stateAfterIncrement, aux: auxFromIncrement } = await staction.actions.increment(5);
     console.log('After increment:', stateAfterIncrement);
-    console.log('Passed from increment:', passedFromIncrement.get('incrementAmount')); // 5
+    console.log('Aux data from increment:', auxFromIncrement?.incrementedBy); // 5
 
-    const { state: stateAfterMessage, passed: passedFromMessage } = await staction.actions.setMessage('Hello Staction 6.0!');
+    const { state: stateAfterMessage, aux: auxFromMessage } = await staction.actions.setMessage('Hello Staction!');
     console.log('After setMessage:', stateAfterMessage);
-    console.log('Message set timestamp:', passedFromMessage.get('messageSetAt'));
+    console.log('Message set timestamp:', auxFromMessage?.setAt);
 
     console.log('Final state from instance:', staction.state); // Access current state directly
 
@@ -103,14 +104,14 @@ Actions are the core of state changes in Staction. They can be plain functions, 
 *   **`params` Object:** The first argument to every action is a `params` object containing:
     *   `state: () => State`: A function to get the current state.
     *   `actions: WrappedActions`: Access to other actions.
-    *   `passed: (updater) => void`: Function to update the auxiliary `passed` map.
+    *   `aux: (valueOrUpdater) => void`: Function to set or update the auxiliary data for the action. Its type depends on the `AuxData` defined for the action.
     *   `name: string`: The name of the current action.
 
 For a deep dive into actions, including handling different return types (Promises, Generators, Async Generators), see the [**Actions In-Depth section in the Usage Guide**](./USAGE_GUIDE.md#actions-in-depth).
 
 ## TypeScript
 
-Staction is built with TypeScript and offers robust typing. Define types for your `State`, `Actions`, and optionally `PassedMapType` for a fully type-safe experience.
+Staction is built with TypeScript and offers robust typing. Define types for your `State` and `Actions`. Auxiliary data (`AuxData`) types are defined on a per-action basis within `ActionParams` for a fully type-safe experience.
 
 Refer to the [**TypeScript Usage section in the Usage Guide**](./USAGE_GUIDE.md#typescript-usage) for detailed examples.
 
@@ -125,7 +126,7 @@ See the [**React Integration Example in the Usage Guide**](./USAGE_GUIDE.md#reac
 Once you have `const staction = new Staction<MyState, MyActions>()`:
 
 *   **`staction.init(actions, initFunc, stateSetCallback)`**: (Async) Initializes the store. See [Initialization Lifecycle](./USAGE_GUIDE.md#initialization-lifecycle).
-*   **`staction.actions`**: An object containing your wrapped actions. Calling `staction.actions.myAction(...args)` returns `Promise<{ state: NewState, passed: PassedMap }>`.
+*   **`staction.actions`**: An object containing your wrapped actions. Calling `staction.actions.myAction(...args)` returns `Promise<{ state: NewState, aux: AuxDataForThatAction | undefined }>`.
 *   **`staction.state`**: The current, read-only state.
 *   **`staction.getState()`**: Method to get the current state.
 *   **`staction.initialized`**: Boolean getter, `true` if init was successful.

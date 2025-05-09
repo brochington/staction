@@ -25,12 +25,13 @@ Welcome to the Staction Usage Guide! This document will walk you through the cor
         *   [Returning `undefined`](#returning-undefined)
     *   [Accessing Current State (`params.state()`)](#accessing-current-state-paramsstate)
     *   [Calling Other Actions (`params.actions`)](#calling-other-actions-paramsactions)
-    *   [The "Passed" Map (`params.passed`)](#the-passed-map-paramspassed)
+    *   [Auxiliary Data (`params.aux`)](#auxiliary-data-paramsaux)
 5.  [TypeScript Usage](#typescript-usage)
     *   [Defining State and Action Types](#defining-state-and-action-types)
     *   [Typing `ActionParams`](#typing-actionparams)
     *   [Typing the Staction Instance](#typing-the-staction-instance)
-    *   [Typing `PassedMapType`](#typing-passedmaptype)
+    *   [Typing `AuxData`](#typing-auxdata)
+    *   [Deriving Individual Action Types with `typeof`](#deriving-individual-action-types-with-typeof)
 6.  [Middleware](#middleware)
     *   [Defining Middleware](#defining-middleware)
     *   [Pre and Post Middleware](#pre-and-post-middleware)
@@ -56,7 +57,7 @@ Staction offers a minimal yet powerful approach to state management. It's design
 *   First-class support for Promises, Generators, and Async Generators in actions.
 *   Strong TypeScript integration for type safety.
 *   Middleware support for cross-cutting concerns (e.g., logging, API calls).
-*   "Passed" map feature to return auxiliary data from actions.
+*   "Auxiliary data" (`aux`) feature to return non-state data from actions.
 *   Lightweight and focused.
 
 ## 2. Core Concepts
@@ -139,7 +140,7 @@ async function startApp() {
 
     const { state: stateAfterSet, passed } = await staction.actions.setValue(10);
     console.log('After setValue:', stateAfterSet); // { count: 10 }
-    console.log('Passed data from setValue:', passed); // Map {}
+    console.log('Auxiliary data from setValue:', passed); // undefined, as setValue doesn't use aux
 
   } catch (error) {
     console.error('Initialization or action error:', error);
@@ -214,8 +215,8 @@ startTypedApp();
 Every action function you define receives a single object as its first parameter, conventionally named `params`. This object has the following properties:
 
 *   `state: () => State`: A function. Call `params.state()` to get the current, up-to-date state.
-*   `actions: WrappedActions<State, Actions, PassedMapType>`: An object containing all other actions, allowing you to call actions from within another action.
-*   `passed: (updater) => void`: A function to set auxiliary data that will be returned alongside the state when the action resolves.
+*   `actions: StactionActions<State, Actions, AuxData>`: An object containing all other actions, allowing you to call actions from within another action.
+*   `aux: (valueOrUpdater) => void`: A function to set auxiliary data that will be returned alongside the state when the action resolves. The specific type of `valueOrUpdater` depends on the `AuxData` type defined for this action.
 *   `name: string`: The name of the action currently being executed.
 
 Any additional arguments passed when dispatching an action will follow the `params` object.
@@ -338,7 +339,7 @@ const actions = {
 
 ### Calling Other Actions (`params.actions`)
 
-The `params.actions` object gives you access to all *wrapped* actions, just like `staction.actions`. This allows for composition and reuse of action logic. Remember that calling an action this way also returns `Promise<{ state: State, passed: PassedMapType }>`.
+The `params.actions` object gives you access to all *wrapped* actions, just like `staction.actions`. This allows for composition and reuse of action logic. Remember that calling an action this way also returns `Promise<{ state: State, aux: AuxDataForThisAction | undefined }>`.
 
 ```javascript
 const actions = {
@@ -353,45 +354,87 @@ const actions = {
 };
 ```
 
-### The "Passed" Map (`params.passed`)
+### Auxiliary Data (`params.aux`)
 
-Sometimes, an action needs to communicate auxiliary data back to its caller, data that isn't necessarily part of the global state. The `passed` map is for this.
+Sometimes, an action needs to communicate auxiliary data back to its caller—data that isn't necessarily part of the global state but is useful for the immediate caller. The `aux` feature is for this.
 
-`params.passed` is a function that takes an `updater`.
-*   If `updater` is a `Map` instance, its entries are merged into the action's dedicated `passed` map.
-*   If `updater` is a function, it receives the current `passed` map for that action and should return the modified map.
+`params.aux` is a function available in every action. It takes one argument:
+*   `valueOrUpdater`: This can be either:
+    *   The direct `AuxData` value you want to set.
+    *   An updater function: `(currentAuxValue: AuxData | undefined) => AuxData`. This function receives the currently accumulated `aux` data (or `undefined` if nothing has been set yet in this action) and should return the new `aux` data.
 
-The accumulated `passed` map is returned alongside the `state` when the wrapped action promise resolves: `{ state: State, passed: PassedMapType }`.
+The type of `AuxData` can be anything you define for that specific action (e.g., an object, a string, a number, a Map, or even `void` if no aux data is intended). If not specified, it defaults to `any`.
+
+The accumulated `aux` data is returned alongside the `state` when the wrapped action promise resolves: `{ state: State, aux: AuxDataForThisAction | undefined }`.
 
 ```typescript
+import Staction, { ActionParams, UserActions } from 'staction'; // Assuming UserActions is needed for full type struct
+
 type MyState = { lastId: number | null };
-type MyPassedMap = Map<string, number | string>; // Customize your passed map type
 
-const actions = {
+// Define specific AuxData types for actions
+type CreateItemAux = { newItemId: number; message: string; timestamp: Date };
+type SimpleOperationAux = { success: boolean };
+
+// Forward-declare the actions collection type
+type MyActions = {
   createItem: (
-    { state, passed }: ActionParams<MyState, typeof actions, MyPassedMap>,
+    params: ActionParams<MyState, MyActions, CreateItemAux>,
     itemName: string
-  ) => {
-    const newId = Date.now();
-    passed((currentMap) => { // Function updater
-      currentMap.set('createdItemId', newId);
-      currentMap.set('statusMessage', `Item '${itemName}' created.`);
-      return currentMap;
-    });
-    // Or: passed(new Map([['createdItemId', newId]])); // Map instance updater
+  ) => MyState;
+  performSimpleOp: (
+    params: ActionParams<MyState, MyActions, SimpleOperationAux>
+  ) => MyState;
+  actionWithNoAux: (
+    params: ActionParams<MyState, MyActions> // AuxData defaults to 'any'
+  ) => MyState;
+};
 
+const actionsImpl: MyActions = {
+  createItem: ({ state, aux }, itemName) => {
+    const newId = Date.now();
+    // Set aux data directly
+    aux({ 
+      newItemId: newId, 
+      message: `Item '${itemName}' created.`, 
+      timestamp: new Date() 
+    });
     return { ...state(), lastId: newId };
   },
+  performSimpleOp: ({ state, aux }) => {
+    // Use an updater function for aux data
+    aux((current) => ({ ...current, success: true })); // Assuming current might have other props if set earlier
+    // If this is the first call, current will be undefined. Handle accordingly:
+    // aux((current) => ({ success: true, previousStep: current?.previousStep })); 
+    return { ...state() };
+  },
+  actionWithNoAux: ({ state, aux }) => {
+    // This action doesn't call params.aux(), so its result.aux will be undefined.
+    // The type of aux in params is (valueOrUpdater: any | ((c: any|undefined) => any)) => void
+    return { ...state() };
+  }
 };
 
 // Usage:
-// const staction = new Staction<MyState, typeof actions, MyPassedMap>();
+// const staction = new Staction<MyState, MyActions>();
 // ... init staction ...
-// const { state, passed } = await staction.actions.createItem('My New Gadget');
-// console.log('New item ID from passed map:', passed.get('createdItemId'));
-// console.log('Status from passed map:', passed.get('statusMessage'));
+// async function example() {
+//   const { state, aux } = await staction.actions.createItem('My New Gadget');
+//   if (aux) {
+//     console.log('New item ID from aux data:', aux.newItemId);
+//     console.log('Status from aux data:', aux.message);
+//   }
+
+//   const { aux: opAux } = await staction.actions.performSimpleOp();
+//   if (opAux) {
+//     console.log('Operation success:', opAux.success);
+//   }
+  
+//   const { aux: noAuxResult } = await staction.actions.actionWithNoAux();
+//   console.log('Aux data from actionWithNoAux:', noAuxResult); // undefined
+// }
 ```
-Each action call gets its own isolated `passed` map. If an action calls another action, the `passed` map of the inner action is *not* automatically merged into the outer action's `passed` map. The outer action would receive the inner action's `passed` map as part of the `Promise` resolution and can then choose to incorporate parts of it if needed.
+Each action call gets its own isolated `aux` data context. If an action calls another action, the `aux` data of the inner action is *not* automatically merged into the outer action's `aux` data. The outer action would receive the inner action's `aux` data as part of the `Promise` resolution and can then choose to incorporate parts of it if needed using its own `params.aux()` call.
 
 ## 5. TypeScript Usage
 
@@ -424,21 +467,27 @@ export type AppActions = {
 
 ### Typing `ActionParams`
 
-Use the `ActionParams<State, Actions, PassedMapType?>` type for the first parameter of your action functions.
+Use the `ActionParams<State, ActionsCollectionType, AuxData?>` type for the first parameter of your action functions. `ActionsCollectionType` should be the type of your entire actions object (e.g., `AppActions` in the example below), and `AuxData` is the specific auxiliary data type for *that particular action*.
 
 ```typescript
 // src/actions.ts
 import { ActionParams } from 'staction';
-import { AppState, AppActions } from './types'; // Your defined types
+import { AppState, AppActions, UserDataAux } from './types'; // Assuming UserDataAux is defined for an action
 
 export const appActionsImpl: AppActions = {
   setUser: (params: ActionParams<AppState, AppActions>, user) => {
     // params.state() is typed as () => AppState
-    // params.actions is typed as WrappedActions<AppState, AppActions>
+    // params.actions is typed as StactionActions<AppState, AppActions>
     return { ...params.state(), user, isLoading: false };
   },
   setTheme: ({ state }: ActionParams<AppState, AppActions>, theme) => {
     return { ...state(), theme };
+  },
+  fetchUserDetails: async (params: ActionParams<AppState, AppActions, UserDataAux>, userId: string) => {
+    params.aux({ fetchedFor: userId, status: 'pending' });
+    // ... fetch logic ...
+    // params.aux({ fetchedFor: userId, status: 'success', data: {...} });
+    return params.state();
   },
   // ... other actions
 };
@@ -469,38 +518,131 @@ async function initializeStore() {
 // stactionInstance.actions.setUser will have its arguments and return type correctly inferred.
 ```
 
-### Typing `PassedMapType`
+### Typing `AuxData`
 
-If you use the `passed` functionality with a specific map structure, provide it as the third type argument to `Staction` and `ActionParams`.
+To get strong typing for auxiliary data (`aux`) for a specific action:
+1.  Define the type for your `AuxData` (e.g., `type MyActionAux = { transactionId: string; success: boolean; }`).
+2.  Provide this type as the third generic argument to `ActionParams` in that action's signature: `params: ActionParams<MyState, MyActionCollection, MyActionAux>`.
+3.  The `params.aux` function will then be correctly typed to accept `MyActionAux` or an updater function for `MyActionAux`.
+4.  The `aux` property in the result of `await staction.actions.myAction()` will be typed as `MyActionAux | undefined`.
 
 ```typescript
-import Staction, { ActionParams } from 'staction';
+import Staction, { ActionParams, UserActions } from 'staction';
 
 type MyState = { value: number };
-type MyPassedData = Map<'operationId' | 'timestamp', string | number>;
+type OperationAux = { operationId: string; timestamp: number; status: 'success' | 'failure' };
 
+// Forward-declare your actions collection type
 type MyActions = {
   performOperation: (
-    params: ActionParams<MyState, MyActions, MyPassedData>,
+    params: ActionParams<MyState, MyActions, OperationAux>,
     input: number
+  ) => MyState;
+  anotherAction: ( // Example with no specific AuxData
+    params: ActionParams<MyState, MyActions> 
   ) => MyState;
 };
 
-const staction = new Staction<MyState, MyActions, MyPassedData>();
+const staction = new Staction<MyState, MyActions>();
 
 const actionsImpl: MyActions = {
-  performOperation: ({ state, passed }, input) => {
+  performOperation: ({ state, aux }, input) => {
     const opId = `op-${Date.now()}`;
-    passed((map) => map.set('operationId', opId).set('timestamp', Date.now()));
-    // passed map is now MyPassedData
-    return { value: state().value + input };
+    aux({ operationId: opId, timestamp: Date.now(), status: 'success' });
+    // aux is typed as AuxValueUpdater<OperationAux>
+    return { ...state(), value: state().value + input };
   },
+  anotherAction: ({ state, aux }) => {
+    // Here, aux is AuxValueUpdater<any>
+    // aux({ message: "hello" }) // This would work, aux data would be { message: "hello" }
+    return state();
+  }
 };
 // ... init staction ...
 
-// const { state, passed } = await staction.actions.performOperation(10);
-// `passed` will be correctly typed as MyPassedData
+// async function exampleUsage() {
+//   await staction.init(actionsImpl, () => ({value: 0}), () => {});
+//   const { state, aux } = await staction.actions.performOperation(10);
+//   // `aux` here is correctly typed as OperationAux | undefined
+//   if (aux) {
+//     console.log(aux.operationId, aux.status);
+//   }
+
+//   const { aux: otherAux } = await staction.actions.anotherAction();
+//   // `otherAux` is typed as any | undefined (or undefined if no call to aux() was made)
+// }
 ```
+
+### Deriving Individual Action Types with `typeof`
+
+Another useful TypeScript pattern is to define your action function implementation first, and then use `typeof` to assign its type within your main actions collection type. This ensures your implementation and its type signature are tightly coupled.
+
+This approach is particularly handy when you want to be sure your function implementation (including its use of `ActionParams`, specific `AuxData`, and other arguments) perfectly matches the type you intend for it within your actions collection.
+
+```typescript
+import Staction, { ActionParams, UserActions } from 'staction';
+
+type MyState = { 
+  count: number;
+  log: string[];
+};
+
+// Forward-declare (or have already defined) your main actions collection type.
+// This is important because ActionParams needs it.
+type MyActionsCollection = {
+  increment: typeof incrementActionImpl;
+  logAndReset: typeof logAndResetActionImpl;
+};
+
+// 1. Define the action function implementation with fully typed params.
+function incrementActionImpl(
+  params: ActionParams<MyState, MyActionsCollection>,
+  amount: number
+) {
+  return { ...params.state(), count: params.state().count + amount };
+}
+
+// Example with AuxData
+type LogAuxData = { resetTimestamp: number };
+async function logAndResetActionImpl(
+  params: ActionParams<MyState, MyActionsCollection, LogAuxData>,
+  message: string
+): Promise<MyState> {
+  params.aux({ resetTimestamp: Date.now() });
+  return { ...params.state(), count: 0, log: [...params.state().log, message] };
+}
+
+// 2. Define the actions object that Staction will use.
+// TypeScript will check if `incrementActionImpl` and `logAndResetActionImpl` 
+// match the types defined in `MyActionsCollection` via `typeof`.
+const stactionActionsImpl: MyActionsCollection = {
+  increment: incrementActionImpl,
+  logAndReset: logAndResetActionImpl,
+};
+
+const staction = new Staction<MyState, MyActionsCollection>();
+
+// Initialize Staction (example)
+// async function main() {
+//   await staction.init(
+//     stactionActionsImpl, 
+//     () => ({ count: 0, log: [] }), 
+//     (newState) => console.log(newState)
+//   );
+
+//   const { state: s1, aux: a1 } = await staction.actions.increment(5);
+//   // a1 is 'any | undefined' because incrementActionImpl didn't specify AuxData in ActionParams
+
+//   const { state: s2, aux: a2 } = await staction.actions.logAndReset("Session ended");
+//   // a2 is 'LogAuxData | undefined'
+// }
+```
+
+**When to use this pattern:**
+*   When you prefer to write the implementation first and derive the type from it.
+*   To ensure a very tight coupling between an action's specific implementation details (like its `AuxData` type usage) and its type within the actions collection.
+
+Remember that for the `ActionParams` within your implementation (e.g., `ActionParams<MyState, MyActionsCollection, LogAuxData>`), the `MyActionsCollection` type still needs to be defined or forward-declared so TypeScript understands the structure of `params.actions`.
 
 ## 6. Middleware
 
@@ -674,7 +816,7 @@ await staction.actions.someAction('payload2');
 
 Here's a common pattern for using Staction with React and TypeScript, employing Context API.
 
-```typescript
+```typitten
 // src/state/appState.ts
 export type AppState = {
   count: number;
@@ -704,7 +846,7 @@ export const appActionsImpl: AppActions = {
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import Staction from 'staction';
 import { AppState, initialAppState } from './appState';
-import { AppActions, appActionsImpl } !== './appActions';
+import { AppActions, appActionsImpl } from './appActions';
 
 // Create a Staction instance (singleton or per context)
 const appStaction = new Staction<AppState, AppActions>();
@@ -832,7 +974,7 @@ In this React example:
     *   Wrap `staction.init()` in a `try/catch`.
     *   Action calls (`staction.actions.yourAction()`) return Promises that can reject. Handle these rejections appropriately in your UI or calling logic.
     *   Inside actions, use `try/catch` for async operations that might fail (e.g., API calls) and update the state accordingly (e.g., set an error message in the state).
-*   **Use `passed` for Ephemeral Data:** If an action needs to return temporary data that shouldn't live in the global state (e.g., a newly created ID, a success/failure status for a specific operation that the caller needs immediately), use the `passed` map.
+*   **Use `aux` for Ephemeral Data:** If an action needs to return temporary data that shouldn't live in the global state (e.g., a newly created ID, a success/failure status for a specific operation that the caller needs immediately), use the `aux` data feature.
 *   **Middleware for Cross-Cutting Concerns:** Use middleware for logging, analytics, global error handling that modifies state (e.g., setting a global error message), or authentication checks. Avoid putting core business logic of a specific action into middleware.
 *   **Consider `initFunc` for Complex Initial Setup:** If your application needs to fetch data or run several setup steps before it's ready, `initFunc` (especially an async one that calls actions) is a good place for this.
 

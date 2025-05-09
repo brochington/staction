@@ -1,3 +1,10 @@
+import type {
+  InitState,
+  UserActions,
+  StactionActions,
+  StactionMiddlewareParams,
+} from './Staction.d';
+
 type TestSubject = {
   [Symbol.iterator]: string;
   [Symbol.asyncIterator]: string;
@@ -35,31 +42,12 @@ interface StactionMiddleware {
   meta: object;
 }
 
-interface StactionMiddlewareParams<State, Meta = object> {
-  state: () => State;
-  name: string;
-  args: any[];
-  meta: Meta;
-}
-
-type InitState = 'uninitialized' | 'initializing' | 'initialized' | 'initerror';
-
-// Helper type for internal wrapped actions
-type InternalWrappedActions<UserActionsObject extends { [s: string]: Function }, CurrentState> = {
-  [K in keyof UserActionsObject]: UserActionsObject[K] extends (
-    params: any, 
-    ...args: infer Args 
-  ) => any 
-    ? (...args: Args) => Promise<{ state: CurrentState; aux: any | undefined }>
-    : never; 
-};
-
-class Staction<State, ActionsInput extends { [s: string]: Function }> {
+class Staction<State, ActionsInput extends UserActions<State, ActionsInput>> {
   private _initState: InitState = 'uninitialized';
   private _actions!: ActionsInput;
-  
-  private _wrappedActions: InternalWrappedActions<ActionsInput, State> = {} as any; 
-  
+
+  private _wrappedActions: StactionActions<State, ActionsInput> = {} as any;
+
   private _state: State = {} as State;
   private _stateSetCallback: Function = () => {};
   private _loggingEnabled: boolean = true;
@@ -69,8 +57,13 @@ class Staction<State, ActionsInput extends { [s: string]: Function }> {
 
   async init(
     actions: ActionsInput,
-    initFunc: (actions: any) => Promise<State> | State,
-    stateSetCallback: (state: State, actions: any) => void
+    initFunc: (
+      actions: StactionActions<State, ActionsInput>
+    ) => Promise<State> | State,
+    stateSetCallback: (
+      state: State,
+      actions: StactionActions<State, ActionsInput>
+    ) => void
   ) {
     if (this._initState !== 'uninitialized') {
       let errorMsg = '';
@@ -88,21 +81,21 @@ class Staction<State, ActionsInput extends { [s: string]: Function }> {
           break;
       }
       const err = new Error(errorMsg);
-      console.error(err); 
-      throw err; 
+      console.error(err);
+      throw err;
     }
-    
+
     try {
       this._initState = 'initializing';
       this._stateSetCallback = stateSetCallback;
-      
+
       this._wrappedActions = Object.entries(actions).reduce(
         (acc, [name, actionFunc]) => {
-          (acc as any)[name as keyof ActionsInput] = (...args: any[]) => 
-            this.actionWrapper(name, actionFunc, ...args);
+          (acc as any)[name as keyof ActionsInput] = (...args: any[]) =>
+            this.actionWrapper(name, actionFunc as Function, ...args);
           return acc;
         },
-        {} as InternalWrappedActions<ActionsInput, State>
+        {} as StactionActions<State, ActionsInput>
       );
 
       this._actions = actions;
@@ -121,7 +114,7 @@ class Staction<State, ActionsInput extends { [s: string]: Function }> {
     }
   }
 
-  get actions(): InternalWrappedActions<ActionsInput, State> {
+  get actions(): StactionActions<State, ActionsInput> {
     return this._wrappedActions;
   }
 
@@ -143,7 +136,7 @@ class Staction<State, ActionsInput extends { [s: string]: Function }> {
 
   async actionWrapper(
     name: string,
-    func: Function, 
+    func: Function,
     ...args: any[]
   ): Promise<{ state: State; aux: any | undefined }> {
     if (this._loggingEnabled) {
@@ -168,7 +161,7 @@ class Staction<State, ActionsInput extends { [s: string]: Function }> {
 
     const params = {
       state: this.getState,
-      actions: this._wrappedActions as any, 
+      actions: this._wrappedActions as any,
       aux: updateAuxData,
       name: name,
     };
@@ -247,13 +240,13 @@ class Staction<State, ActionsInput extends { [s: string]: Function }> {
 
         if (
           mReturnedValue === undefined &&
-           !isPromise(mReturnedValue) && 
-           !isGeneratorFunction(mReturnedValue) &&
-           !isAsyncGeneratorFunction(mReturnedValue)
+          !isPromise(mReturnedValue) &&
+          !isGeneratorFunction(mReturnedValue) &&
+          !isAsyncGeneratorFunction(mReturnedValue)
         ) {
-           mStateToProcess = params.state();
+          mStateToProcess = params.state();
         } else {
-            mStateToProcess = mReturnedValue;
+          mStateToProcess = mReturnedValue;
         }
 
         await this.handleActionReturnTypes(mStateToProcess);

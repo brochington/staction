@@ -107,19 +107,24 @@ describe('Staction', () => {
     test('generator', async () => {
       type State = { count: number };
       type StateFunc = () => State;
-      type CurrentActions = typeof actions;
-      type CurrentParams = {
-        state: StateFunc;
-        actions: CurrentActions;
-        name: string;
+
+      // Forward-declare the type of the actions collection for this test
+      type GeneratorActions = {
+        testAction: (
+          params: ActionParams<State, GeneratorActions, any>
+        ) => Generator<{ count: number }, void, unknown>;
       };
 
       let setStateCount = 0;
-      const actions = {
-        testAction: function* ({ state }: CurrentParams) {
+      const actionsImpl: GeneratorActions = {
+        testAction: function* ({ state, actions }) {
+          // `actions` here is now StactionActions<State, GeneratorActions>
           yield { count: state().count + 1 };
 
           expect(state().count).toEqual(1);
+
+          // Example of calling another action if it existed in GeneratorActions
+          // if (actions.anotherActionInGen) { await actions.anotherActionInGen(); }
 
           yield { count: state().count + 1 };
 
@@ -127,19 +132,11 @@ describe('Staction', () => {
         },
       };
 
-      type Actions = typeof actions;
-
-      type Params = {
-        state: StateFunc;
-        actions: Actions;
-        name: string;
-      };
-
-      const staction = new Staction<State, Actions>();
+      const staction = new Staction<State, GeneratorActions>();
       staction.disableLogging();
 
       staction.init(
-        actions,
+        actionsImpl, // Use the correctly typed implementation
         () => {
           return { count: 0 };
         },
@@ -148,7 +145,8 @@ describe('Staction', () => {
         }
       );
 
-      // @ts-ignore
+      // @ts-ignore - This was present before, might indicate other args/payloads not typed in GeneratorActions.testAction if it took more than params.
+      // If testAction takes no other arguments, this ignore might not be needed after the refactor.
       const { state: finalState } = (await staction.actions.testAction()) as {
         state: State;
       };
@@ -160,8 +158,17 @@ describe('Staction', () => {
     test('promise', async () => {
       type State = { count: number };
       type StateFunc = () => State;
-      const actions = {
-        testAction: function ({ state }: Params) {
+
+      // Forward-declare the type of the actions collection for this test
+      type PromiseActions = {
+        testAction: (
+          params: ActionParams<State, PromiseActions, any>
+        ) => Promise<{ count: number }>;
+      };
+
+      const actionsImpl: PromiseActions = {
+        testAction: function ({ state, actions }) {
+          // `actions` here is StactionActions<State, PromiseActions>
           return new Promise((resolve) => {
             setTimeout(() => {
               resolve({ count: state().count + 1 });
@@ -170,25 +177,17 @@ describe('Staction', () => {
         },
       };
 
-      type Actions = typeof actions;
-
-      type Params = {
-        state: StateFunc;
-        actions: Actions;
-        name: string;
-      };
-
-      const staction = new Staction<State, Actions>();
+      const staction = new Staction<State, PromiseActions>();
       staction.disableLogging();
 
       staction.init(
-        actions,
+        actionsImpl, // Use the correctly typed implementation
         () => {
           return { count: 0 };
         },
         noop
       );
-      // @ts-ignore
+      // @ts-ignore - Similar to above, if testAction takes no other args, this might not be needed.
       const { state: finalState } = (await staction.actions.testAction()) as {
         state: State;
       };
@@ -200,8 +199,20 @@ describe('Staction', () => {
       type State = { count: number };
       type StateFunc = () => State;
 
-      const actions = {
-        testAction: function* ({ state }: Params) {
+      // Forward-declare the type of the actions collection
+      type GenAsyncActions = {
+        testAction: (
+          params: ActionParams<State, GenAsyncActions, any>
+        ) => Generator<
+          Promise<{ count: number }> | { count: number },
+          void,
+          unknown
+        >;
+      };
+
+      const actionsImpl: GenAsyncActions = {
+        testAction: function* ({ state, actions }) {
+          // `actions` here is StactionActions<State, GenAsyncActions>
           yield { count: state().count + 1 };
           expect(state().count).toEqual(1);
 
@@ -215,19 +226,11 @@ describe('Staction', () => {
         },
       };
 
-      type Actions = typeof actions;
-
-      type Params = {
-        state: StateFunc;
-        actions: Actions;
-        name: string;
-      };
-
-      const staction = new Staction<State, Actions>();
+      const staction = new Staction<State, GenAsyncActions>();
       staction.disableLogging();
 
       staction.init(
-        actions,
+        actionsImpl,
         () => {
           return { count: 0 };
         },
@@ -245,10 +248,18 @@ describe('Staction', () => {
 
     test('Only interates over generator functions, not state that is iterable', async () => {
       type State = number[];
-      type StateFunc = () => State;
       var testIterable = [1, 2, 3];
-      var actions = {
-        testAction: function* ({ state }: Params) {
+
+      // Forward-declare the type of the actions collection
+      type IterableActions = {
+        testAction: (
+          params: ActionParams<State, IterableActions, any>
+        ) => Generator<number[], void, unknown>;
+      };
+
+      const actionsImpl: IterableActions = {
+        testAction: function* ({ state, actions }) {
+          // `actions` here is StactionActions<State, IterableActions>
           yield state().map((v) => v + 2);
 
           expect(state()[0]).toEqual(3);
@@ -259,18 +270,10 @@ describe('Staction', () => {
         },
       };
 
-      type Actions = typeof actions;
-
-      type Params = {
-        state: StateFunc;
-        actions: Actions;
-        name: string;
-      };
-
-      let localStaction = new Staction<typeof testIterable, typeof actions>();
+      let localStaction = new Staction<typeof testIterable, IterableActions>();
       localStaction.disableLogging();
 
-      localStaction.init(actions, () => testIterable, noop);
+      localStaction.init(actionsImpl, () => testIterable, noop);
 
       // @ts-ignore
       const { state: finalState } =
@@ -285,9 +288,17 @@ describe('Staction', () => {
 
     test('async generator (asyncIterable)', async () => {
       type State = { count: number };
-      type StateFunc = () => State;
-      var actions = {
-        testAction: async function* ({ state }: Params) {
+
+      // Forward-declare the type of the actions collection
+      type AsyncGenActions = {
+        testAction: (
+          params: ActionParams<State, AsyncGenActions, any>
+        ) => AsyncGenerator<{ count: number }, void, unknown>;
+      };
+
+      const actionsImpl: AsyncGenActions = {
+        testAction: async function* ({ state, actions }) {
+          // `actions` here is StactionActions<State, AsyncGenActions>
           yield { count: state().count + 1 };
 
           expect(state().count).toEqual(1);
@@ -304,20 +315,11 @@ describe('Staction', () => {
         },
       };
 
-      type Actions = typeof actions;
-
-      type Params = {
-        state: StateFunc;
-        actions: Actions;
-        name: string;
-      };
-
-      const staction = new Staction<State, Actions>();
+      const staction = new Staction<State, AsyncGenActions>();
       staction.disableLogging();
 
-      staction.init(actions, () => ({ count: 0 }), noop);
+      staction.init(actionsImpl, () => ({ count: 0 }), noop);
 
-      // @ts-ignore
       const { state: resultState } =
         (await staction.actions.testAction()) as unknown as { state: State };
 
@@ -330,7 +332,7 @@ describe('Staction', () => {
         errorInGenerator: function* ({
           state,
           aux,
-        }: ActionParams<State, any, Map<"step1" | "step2", boolean>>) {
+        }: ActionParams<State, any, Map<'step1' | 'step2', boolean>>) {
           yield { status: 'step 1 complete' };
           expect(state().status).toBe('step 1 complete');
           aux(() => new Map().set('step1', true));
@@ -338,7 +340,9 @@ describe('Staction', () => {
           yield Promise.reject(new Error('Generator promise failed'));
 
           // This part should not be reached
-          aux((m: Map<"step1" | "step2", boolean> | undefined) => m!.set('step2', true));
+          aux((m: Map<'step1' | 'step2', boolean> | undefined) =>
+            m!.set('step2', true)
+          );
           yield { status: 'step 2 complete' };
         },
       };
@@ -369,11 +373,6 @@ describe('Staction', () => {
         { status: 'step 1 complete' },
         staction.actions
       );
-
-      // Check passed map: only the first update should have occurred.
-      // Since it threw, we can't. This part of the test highlights a limitation
-      // in retrieving the `aux` map if the action errors out mid-way through a generator.
-      // For now, we're focusing on error propagation and state.
     });
 
     test('generator with mixed yield types (plain, promise, async iife)', async () => {
@@ -387,9 +386,7 @@ describe('Staction', () => {
       let callCount = 0;
 
       const actions = {
-        mixedYieldsAction: function* ({
-          state,
-        }: ActionParams<State, any>) {
+        mixedYieldsAction: function* ({ state }: ActionParams<State, any>) {
           // 1. Yield plain object
           yield { ...state(), step: 1, data: 'plain_yield_1' };
           expect(state().step).toBe(1);
@@ -488,19 +485,21 @@ describe('Staction', () => {
         type State = { value: string };
         // AuxData can be `void` or `never` if truly no data is intended.
         // Or simply don't specify it in ActionParams if `any` is acceptable for AuxData.
-        type NoAuxData = void; 
+        type NoAuxData = void;
 
         type CurrentTestActionsShape = {
-          testAction: (params: ActionParams<State, CurrentTestActionsShape, NoAuxData>) => State;
+          testAction: (
+            params: ActionParams<State, CurrentTestActionsShape, NoAuxData>
+          ) => State;
         };
 
         const actionsImpl: CurrentTestActionsShape = {
-          testAction: ({ state }) => { 
+          testAction: ({ state }) => {
             // No call to params.aux()
             return { ...state(), value: 'new value' };
           },
         };
-        
+
         type StactionUserActions = UserActions<State, CurrentTestActionsShape>;
         const staction = new Staction<State, StactionUserActions>();
         staction.disableLogging();
@@ -514,18 +513,28 @@ describe('Staction', () => {
 
       test('should set aux data using a direct value', async () => {
         type State = { id: number };
-        type CreateItemAuxData = { newItemId: number; message: string; timestamp?: Date };
+        type CreateItemAuxData = {
+          newItemId: number;
+          message: string;
+          timestamp?: Date;
+        };
 
         type CurrentTestActionsShape = {
-          createItem: (params: ActionParams<State, CurrentTestActionsShape, CreateItemAuxData>) => State;
+          createItem: (
+            params: ActionParams<
+              State,
+              CurrentTestActionsShape,
+              CreateItemAuxData
+            >
+          ) => State;
         };
 
         const actionsImpl: CurrentTestActionsShape = {
           createItem: ({ state, aux }) => {
             const newId = state().id + 1;
-            const auxValue: CreateItemAuxData = { 
-              newItemId: newId, 
-              message: 'Item created' 
+            const auxValue: CreateItemAuxData = {
+              newItemId: newId,
+              message: 'Item created',
             };
             aux(auxValue);
             return { ...state(), id: newId };
@@ -548,23 +557,37 @@ describe('Staction', () => {
 
       test('should update aux data using an updater function', async () => {
         type State = { status: string };
-        type ProcessDataAux = { processedId?: number; isValid?: boolean; steps: string[] };
+        type ProcessDataAux = {
+          processedId?: number;
+          isValid?: boolean;
+          steps: string[];
+        };
 
         type CurrentTestActionsShape = {
-          processData: (params: ActionParams<State, CurrentTestActionsShape, ProcessDataAux>) => State;
+          processData: (
+            params: ActionParams<State, CurrentTestActionsShape, ProcessDataAux>
+          ) => State;
         };
 
         const actionsImpl: CurrentTestActionsShape = {
           processData: ({ state, aux }) => {
             aux({ steps: ['started'] });
-            
+
             // Simulate some processing
             const id = 123;
-            aux((current: ProcessDataAux | undefined) => ({ ...current!, processedId: id, steps: [...current!.steps, 'id_set'] }));
+            aux((current: ProcessDataAux | undefined) => ({
+              ...current!,
+              processedId: id,
+              steps: [...current!.steps, 'id_set'],
+            }));
 
             const valid = true;
-            aux((current: ProcessDataAux | undefined) => ({ ...current!, isValid: valid, steps: [...current!.steps, 'validated'] }));
-            
+            aux((current: ProcessDataAux | undefined) => ({
+              ...current!,
+              isValid: valid,
+              steps: [...current!.steps, 'validated'],
+            }));
+
             return { ...state(), status: 'processed' };
           },
         };
@@ -587,14 +610,16 @@ describe('Staction', () => {
         type UpdateAuxData = { initialMessage?: string; finalMessage: string };
 
         type CurrentTestActionsShape = {
-          updateAction: (params: ActionParams<State, CurrentTestActionsShape, UpdateAuxData>) => State;
+          updateAction: (
+            params: ActionParams<State, CurrentTestActionsShape, UpdateAuxData>
+          ) => State;
         };
 
         const actionsImpl: CurrentTestActionsShape = {
           updateAction: ({ state, aux }) => {
             aux((current: UpdateAuxData | undefined) => {
               expect(current).toBeUndefined();
-              return { ...current, finalMessage: 'Set after undefined' }; 
+              return { ...current, finalMessage: 'Set after undefined' };
             });
             return { ...state(), version: state().version + 1 };
           },
@@ -620,19 +645,21 @@ describe('Staction', () => {
         type TestAuxData = { message: string };
 
         type CurrentTestActionsShape = {
-          testRobustAux: (params: ActionParams<State, CurrentTestActionsShape, TestAuxData>) => State;
+          testRobustAux: (
+            params: ActionParams<State, CurrentTestActionsShape, TestAuxData>
+          ) => State;
         };
         const actionsImpl: CurrentTestActionsShape = {
           testRobustAux: ({ aux, state }) => {
             try {
-                (aux as any)(123);
-            } catch(e) {
-                // Depending on internal implementation, this might or might not throw.
-                // The goal is that valid uses (AuxData or (AuxData|undefined)=>AuxData) work.
-                // Invalid uses are primarily caught by TypeScript.
+              (aux as any)(123);
+            } catch (e) {
+              // Depending on internal implementation, this might or might not throw.
+              // The goal is that valid uses (AuxData or (AuxData|undefined)=>AuxData) work.
+              // Invalid uses are primarily caught by TypeScript.
             }
-            aux({message: "correctly set"});
-            return { ...state(), value: state().value +1 };
+            aux({ message: 'correctly set' });
+            return { ...state(), value: state().value + 1 };
           },
         };
         type StactionUserActions = UserActions<State, CurrentTestActionsShape>;
@@ -641,15 +668,22 @@ describe('Staction', () => {
         staction.init(actionsImpl, () => ({ value: 0 }), noop);
 
         const { aux } = await staction.actions.testRobustAux();
-        expect(aux?.message).toBe("correctly set");
+        expect(aux?.message).toBe('correctly set');
       });
 
       test('should accumulate in aux data across yields in a generator action', async () => {
         type State = { counter: number };
-        type GeneratorAux = { step1?: string; step2?: string; finalStep?: string; commonValue: number };
+        type GeneratorAux = {
+          step1?: string;
+          step2?: string;
+          finalStep?: string;
+          commonValue: number;
+        };
 
         type CurrentTestActionsShape = {
-          generatorWithAux: (params: ActionParams<State, CurrentTestActionsShape, GeneratorAux>) => Generator<any, State, any>;
+          generatorWithAux: (
+            params: ActionParams<State, CurrentTestActionsShape, GeneratorAux>
+          ) => Generator<any, State, any>;
         };
 
         const actionsImpl: CurrentTestActionsShape = {
@@ -657,17 +691,17 @@ describe('Staction', () => {
             aux({ commonValue: 0, step1: 'first yield processed' });
             yield { counter: state().counter + 1 };
 
-            aux((current: GeneratorAux | undefined) => ({ 
-              ...current!, 
+            aux((current: GeneratorAux | undefined) => ({
+              ...current!,
               commonValue: state().counter * 10,
-              step2: 'second yield processed' 
+              step2: 'second yield processed',
             }));
             yield { counter: state().counter + 1 };
 
-            aux((current: GeneratorAux | undefined) => ({ 
-              ...current!, 
+            aux((current: GeneratorAux | undefined) => ({
+              ...current!,
               commonValue: current!.commonValue + state().counter,
-              finalStep: 'final return processed' 
+              finalStep: 'final return processed',
             }));
             return { ...state(), counter: state().counter + 1 };
           },
@@ -678,7 +712,8 @@ describe('Staction', () => {
         staction.disableLogging();
         staction.init(actionsImpl, () => ({ counter: 0 }), noop);
 
-        const { state: finalState, aux } = await staction.actions.generatorWithAux();
+        const { state: finalState, aux } =
+          await staction.actions.generatorWithAux();
 
         expect(finalState.counter).toBe(3);
         expect(aux).toBeDefined();
@@ -1538,11 +1573,19 @@ describe('Staction', () => {
     // Types for the original action functions provided to staction.init
     type OriginalActions = {
       parentAction: (
-        params: ActionParams<NestedState, OriginalActions, Map<"parent_start" | "parent_end", string>>,
+        params: ActionParams<
+          NestedState,
+          OriginalActions,
+          Map<'parent_start' | 'parent_end', string>
+        >,
         data: string
       ) => Promise<NestedState> | NestedState;
       childAction: (
-        params: ActionParams<NestedState, OriginalActions, Map<"child_data", string>>,
+        params: ActionParams<
+          NestedState,
+          OriginalActions,
+          Map<'child_data', string>
+        >,
         data: string
       ) => Promise<NestedState> | NestedState;
     };
@@ -1560,11 +1603,21 @@ describe('Staction', () => {
 
     const actionsImpl: OriginalActions = {
       parentAction: async (
-        { state, actions, aux }: ActionParams<NestedState, OriginalActions, Map<"parent_start" | "parent_end", string>>,
+        {
+          state,
+          actions,
+          aux,
+        }: ActionParams<
+          NestedState,
+          OriginalActions,
+          Map<'parent_start' | 'parent_end', string>
+        >,
         data: string
       ) => {
         executionLog.push('parentAction_start');
-        aux((m: Map<"parent_start" | "parent_end", string> | undefined) => m ? m.set('parent_start', data) : new Map().set('parent_start', data));
+        aux((m: Map<'parent_start' | 'parent_end', string> | undefined) =>
+          m ? m.set('parent_start', data) : new Map().set('parent_start', data)
+        );
 
         // 'actions.childAction' here is the wrapped version, so it returns { state, aux }
         const { state: stateAfterChild, aux: childAux } =
@@ -1575,16 +1628,29 @@ describe('Staction', () => {
         expect(state().childValue).toBe('child_data_processed');
         expect(stateAfterChild.childValue).toBe('child_data_processed');
 
-        aux((m: Map<"parent_start" | "parent_end", string> | undefined) => m ? m.set('parent_end', 'parent_done') : new Map().set('parent_end', 'parent_done'));
+        aux((m: Map<'parent_start' | 'parent_end', string> | undefined) =>
+          m
+            ? m.set('parent_end', 'parent_done')
+            : new Map().set('parent_end', 'parent_done')
+        );
         // The original action returns just the new state
         return { ...state(), parentValue: data + '_processed' };
       },
       childAction: async (
-        { state, aux }: ActionParams<NestedState, OriginalActions, Map<"child_data", string>>,
+        {
+          state,
+          aux,
+        }: ActionParams<
+          NestedState,
+          OriginalActions,
+          Map<'child_data', string>
+        >,
         data: string
       ) => {
         executionLog.push('childAction_start');
-        aux((m: Map<"child_data", string> | undefined) => m ? m.set('child_data', data) : new Map().set('child_data', data));
+        aux((m: Map<'child_data', string> | undefined) =>
+          m ? m.set('child_data', data) : new Map().set('child_data', data)
+        );
         // The original action returns just the new state
         return { ...state(), childValue: data + '_processed' };
       },
@@ -1812,7 +1878,11 @@ describe('Staction', () => {
           return { ...state, data: `one:${val}` };
         },
         actionTwo: ({ state, aux }, val: boolean) => {
-          aux((m: Map<string, boolean> | undefined) => m ? m.set('booleanOutput', !val) : new Map().set('booleanOutput', !val));
+          aux((m: Map<string, boolean> | undefined) =>
+            m
+              ? m.set('booleanOutput', !val)
+              : new Map().set('booleanOutput', !val)
+          );
           return { ...state, data: `two:${val}` };
         },
         actionThree: ({ state }) => {
@@ -1836,20 +1906,20 @@ describe('Staction', () => {
       const resultOne = await staction.actions.actionOne(10);
       expect(resultOne.state.data).toBe('one:10');
       expect(resultOne.aux).toBeInstanceOf(Map);
-      expect(resultOne.aux.size).toBe(1);
-      expect(resultOne.aux.get('numericOutput')).toBe(20);
+      expect(resultOne.aux?.size).toBe(1);
+      expect(resultOne.aux?.get('numericOutput')).toBe(20);
 
       // Test Action Two
       const resultTwo = await staction.actions.actionTwo(true);
       expect(resultTwo.state.data).toBe('two:true');
       expect(resultTwo.aux).toBeInstanceOf(Map);
-      expect(resultTwo.aux.size).toBe(1);
-      expect(resultTwo.aux.get('booleanOutput')).toBe(false);
+      expect(resultTwo.aux?.size).toBe(1);
+      expect(resultTwo.aux?.get('booleanOutput')).toBe(false);
 
       // Test Action Three
       const resultThree = await staction.actions.actionThree();
       expect(resultThree.state.data).toBe('three');
-      expect(resultThree.aux).toBeUndefined()
+      expect(resultThree.aux).toBeUndefined();
     });
   });
 
@@ -1930,16 +2000,13 @@ describe('Staction', () => {
     test('inferred types are correct', async () => {
       function testAction1(
         { state }: ActionParams<State, TestActions>,
-        nextCount: number,
+        nextCount: number
       ) {
         return { ...state(), count: nextCount };
       }
 
       async function testAction2(
-        {
-          state,
-          aux,
-        }: ActionParams<State, TestActions, Map<'test', string>>,
+        { state, aux }: ActionParams<State, TestActions, Map<'test', string>>,
         nextCount: number
       ): Promise<State> {
         aux(() => new Map().set('test', 'test'));
@@ -1979,8 +2046,9 @@ describe('Staction', () => {
         obj: { key: 'value' },
       });
 
-      const { state: result2, aux: aux2 } =
-        await staction.actions.testAction2(20);
+      const { state: result2, aux: aux2 } = await staction.actions.testAction2(
+        20
+      );
 
       expect(result2).toEqual({
         count: 20,
@@ -1990,8 +2058,8 @@ describe('Staction', () => {
       });
 
       expect(aux2).toBeInstanceOf(Map);
-      expect(aux2.size).toBe(1);
-      expect(aux2.get('test')).toBe('test');
+      expect(aux2?.size).toBe(1);
+      expect(aux2?.get('test')).toBe('test');
     });
   });
 });
