@@ -81,7 +81,7 @@ class Staction<State, ActionsInput extends UserActions<State, ActionsInput>> {
           break;
       }
       const err = new Error(errorMsg);
-      console.error(err);
+
       throw err;
     }
 
@@ -119,6 +119,7 @@ class Staction<State, ActionsInput extends UserActions<State, ActionsInput>> {
   }
 
   get state(): State {
+    // console.log('state: ', this._state?.toJS());
     return this._state;
   }
 
@@ -131,6 +132,7 @@ class Staction<State, ActionsInput extends UserActions<State, ActionsInput>> {
   }
 
   getState = (): State => {
+    // console.log('getState: ', this._state?.toJS());
     return this._state;
   };
 
@@ -176,7 +178,7 @@ class Staction<State, ActionsInput extends UserActions<State, ActionsInput>> {
         !isGeneratorFunction(newState) &&
         !isAsyncGeneratorFunction(newState)
       ) {
-        this.callSetStateCallback(this._state);
+        this.callSetStateCallback();
       }
 
       return { state: this._state, aux: auxData };
@@ -185,35 +187,46 @@ class Staction<State, ActionsInput extends UserActions<State, ActionsInput>> {
     }
   }
 
-  handleActionReturnTypes = async (newState: any): Promise<void> => {
+  handleActionReturnTypes = async (result: any): Promise<void> => {
     try {
-      if (isPromise(newState)) {
-        this._state = await newState;
-      } else if (isGeneratorFunction(newState)) {
-        let result = newState.next();
-        while (!result.done) {
-          await this.handleActionReturnTypes(result.value);
-          this.callSetStateCallback(this._state);
-          result = newState.next();
+      if (isPromise(result)) {
+        const resolvedValue = await result;
+        await this.handleActionReturnTypes(resolvedValue);
+      } else if (isGeneratorFunction(result)) {
+        let genResult = result.next();
+        while (!genResult.done) {
+          await this.handleActionReturnTypes(genResult.value);
+          this.callSetStateCallback();
+          genResult = result.next();
         }
-        if (result.value !== undefined) {
-          await this.handleActionReturnTypes(result.value);
-          this.callSetStateCallback(this._state);
+        if (genResult.value !== undefined) {
+          await this.handleActionReturnTypes(genResult.value);
+          this.callSetStateCallback();
         }
-      } else if (isAsyncGeneratorFunction(newState)) {
-        let result = await newState.next();
-        while (!result.done) {
-          await this.handleActionReturnTypes(result.value);
-          this.callSetStateCallback(this._state);
-          result = await newState.next();
+      } else if (isAsyncGeneratorFunction(result)) {
+        let genResult = await result.next();
+        while (!genResult.done) {
+          await this.handleActionReturnTypes(genResult.value);
+          this.callSetStateCallback();
+          genResult = await result.next();
         }
-        if (result.value !== undefined) {
-          await this.handleActionReturnTypes(result.value);
-          this.callSetStateCallback(this._state);
+        if (genResult.value !== undefined) {
+          await this.handleActionReturnTypes(genResult.value);
+          this.callSetStateCallback();
         }
-      } else {
+      } else if (
+        typeof result === 'function' &&
+        !isGeneratorFunction(result) &&
+        !isAsyncGeneratorFunction(result)
+      ) {
+        const newState = result(this._state);
         if (newState !== undefined) {
           this._state = newState;
+        }
+      } else {
+        // This handles plain state objects and other values.
+        if (result !== undefined) {
+          this._state = result;
         }
       }
     } catch (e) {
@@ -236,26 +249,13 @@ class Staction<State, ActionsInput extends UserActions<State, ActionsInput>> {
         };
 
         const mReturnedValue = m.method(params);
-        let mStateToProcess;
 
-        if (
-          mReturnedValue === undefined &&
-          !isPromise(mReturnedValue) &&
-          !isGeneratorFunction(mReturnedValue) &&
-          !isAsyncGeneratorFunction(mReturnedValue)
-        ) {
-          mStateToProcess = params.state();
-        } else {
-          mStateToProcess = mReturnedValue;
-        }
-
-        await this.handleActionReturnTypes(mStateToProcess);
+        await this.handleActionReturnTypes(mReturnedValue);
       }
     }
   };
 
-  callSetStateCallback = (newState: State) => {
-    this._state = newState;
+  callSetStateCallback = () => {
     this._stateSetCallback(this._state, this._wrappedActions as any);
   };
 

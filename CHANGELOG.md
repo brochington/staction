@@ -1,5 +1,8 @@
 # Changelog
 
+### 6.1.0
+- an update function similar to React's state setter functions can now be returned in actions instead of just the raw next state. This helps solve issues with two async actions firing off at the same time, where internal calls to `state()` wouldn't return updated state from other actions in time. 
+
 ### 6.0.0 - May 8, 2025
 - **New Passed Map** Add "passed" functionality, which is a Map that is set to in an action, and accessed on the output of the action. This enables passing things like created ids through the action, where normally only the entirely updated state object is available.
 - `staction.init()` and the `initFunc` passed into it are now async, so you'll probably want to await it. 

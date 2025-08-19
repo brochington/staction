@@ -48,9 +48,22 @@ export type UserActions<
   ) => any;
 };
 
-interface StactionMiddleware {
+export type StactionMethodResult<State> =
+  | Partial<State>
+  | ((currentState: State) => Partial<State>)
+  | Promise<Partial<State> | ((currentState: State) => Partial<State>)>
+  | Generator<any, any, any>
+  | AsyncGenerator<any, any, any>
+  | void
+  | undefined;
+
+export type MiddlewareMethod<State> = (
+  params: StactionMiddlewareParams<State>
+) => StactionMethodResult<State>;
+
+interface StactionMiddleware<State> {
   type: 'pre' | 'post';
-  method: Function;
+  method: MiddlewareMethod<State>;
   meta: object;
 }
 
@@ -83,7 +96,7 @@ declare class Staction<
   enableStateWhenLogging(): void;
   disableStateWhenLogging(): void;
 
-  setMiddleware(middleware: StactionMiddleware[]): void;
+  setMiddleware(middleware: StactionMiddleware<State>[]): void;
 
   init(
     actions: ActionsInput,
